@@ -108,14 +108,13 @@ struct QuizView: View {
                     Spacer()
                                     }
                                     .padding(.horizontal, 24)
-                                } else if let result = viewModel.finalResult {
-                                    
-                                    // BOOM: Show the glorious result page instead of a spinner!
-                                    ChronotypeResultView(chronotype: result) {
-                                        // When you tap "Continue" on the result page, THEN it dismisses back to your dashboard
-                                        dismiss()
-                                    }
-                                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            } else if let result = viewModel.finalResult {
+                            
+                            ChronotypeResultView(chronotype: result) {
+                                // This fires the save, which triggers the AppStorage router to show the Dashboard!
+                                viewModel.confirmAndGoToDashboard()
+                            }
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
                                     
                                 } else {
                                     // Just a micro-second fallback while it calculates

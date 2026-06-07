@@ -218,15 +218,23 @@ class QuizViewModel {
         saveAndFinish(result: winner)
     }
     
-    private func saveAndFinish(result: Chronotype) {
-        DispatchQueue.main.async {
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
-                self.finalResult = result
-                UserDefaults.standard.set(result.rawValue, forKey: "userChronotype")
-                UserDefaults.standard.removeObject(forKey: "quizUserAnswers")
+    // Update this function so it ONLY sets finalResult, but doesn't save to UserDefaults yet
+        private func saveAndFinish(result: Chronotype) {
+            DispatchQueue.main.async {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                    self.finalResult = result
+                    // ❌ REMOVED: UserDefaults.standard.set(result.rawValue, forKey: "userChronotype")
+                }
             }
         }
-    }
+        
+        // Add this brand new function right below it!
+        func confirmAndGoToDashboard() {
+            if let result = finalResult {
+                // ✅ NOW we save it, which triggers @AppStorage to swap the screen!
+                UserDefaults.standard.set(result.rawValue, forKey: "userChronotype")
+            }
+        }
     
     func resetQuizProgress() {
         self.userAnswers.removeAll()
