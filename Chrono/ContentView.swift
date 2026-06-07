@@ -2,7 +2,7 @@
 //  ContentView.swift
 //  Chrono
 //
-//  Created by Dana on 18/12/1447 AH.
+//  Created by Reema on 18/12/1447 AH.
 //
 
 import SwiftUI
@@ -127,25 +127,43 @@ struct ContentView: View {
                         .padding(.horizontal, 24)
                         .padding(.top, 30)
                     
-                    VStack(spacing: 16) { // Tightened spacing
-                        
-                        BioScheduleRow(title: "Cold rinse", timeRange: "6:30 AM - 8:00 AM", tag: "Morning", suggestion: nil, isActive: false)
-                        
-                        BioScheduleRow(title: "Single coffee", timeRange: "9:00 AM - 10:30 AM", tag: "Boost", suggestion: nil, isActive: false)
-                        
-                        // The Active Demo Block!
-                        BioScheduleRow(
-                            title: "Focus window",
-                            timeRange: "11:00 AM - 1:00 PM",
-                            tag: "Deep Work",
-                            suggestion: "Your score is 94%. High energy detected. Tackle your hardest coding problems right now.",
-                            isActive: true
-                        )
-                        
-                        BioScheduleRow(title: "Light workout", timeRange: "3:00 PM - 5:00 PM", tag: "Fitness", suggestion: nil, isActive: false)
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 16) { // Spacing inside the scrollview container
+                            
+                            let userActivities = ScheduleEngine.getFullSchedule(for: userChronotype)
+                            
+                            ForEach(userActivities) { activity in
+                                let isCurrentlyActive = activity.window.contains()
+                                
+                                let currentScoreInt = mockEnergyScore != nil ? Int(mockEnergyScore!) : nil
+                                let derivedSuggestion = activity.getSuggestion(actualEnergyScore: currentScoreInt)
+                                
+                                BioScheduleRow(
+                                    title: activity.title,
+                                    timeRange: activity.window.displayString,
+                                    tag: activity.category.rawValue,
+                                    suggestion: derivedSuggestion,
+                                    isActive: isCurrentlyActive
+                                )
+                                .onChange(of: isCurrentlyActive) { oldValue, newValue in
+                                    if newValue == true {
+                                        print("🔄 [Chrono Sync] (\(activity.title)) - جاري تحديث ومزامنة البيانات حيوياً...")
+                                        
+                                        Task {
+                                            if let updatedScore = await healthKitManager.calculateMorningBaseline() {
+                                                withAnimation {
+                                                    self.mockEnergyScore = updatedScore
+                                                    // طباعة تأكيد نجاح العملية وظهور النسبة الجديدة في الـ Console
+                                                    print("✅ [Chrono Sync] نجحت المزامنة للسلوت الجديد! النسبة الحالية المحدثة: \(updatedScore)%")
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .padding(.bottom, 20) // Shrunk bottom padding so it doesn't clip
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 20) // Shrunk bottom padding so it doesn't clip
                     
                     Spacer()
                 }
@@ -157,10 +175,14 @@ struct ContentView: View {
         }
         .task {
             // Fetch Health Data on Load
+            print("📱 [App Launch] جاري جلب خط الأساس الأولي للطاقة الصباحية...")
             let isAuthorized = await healthKitManager.requestAuthorization()
             if isAuthorized {
                 if let realBaseline = await healthKitManager.calculateMorningBaseline() {
-                    withAnimation { mockEnergyScore = realBaseline }
+                    withAnimation {
+                        mockEnergyScore = realBaseline
+                        print("🎯 [App Launch] تم تعيين الطاقة الصباحية الأولية: \(realBaseline)%")
+                    }
                 }
             }
         }
@@ -174,6 +196,24 @@ struct ContentView: View {
             )
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
+        }
+        // MARK: - SYSTEM CLOCK TESTING OBSERVER
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            print("⏰ [System Clock] تم رصد تغيير يدوي في وقت النظام! جاري إعادة تقييم الفترات حيوياً...")
+            
+            let currentActivities = ScheduleEngine.getFullSchedule(for: userChronotype)
+            if let activeActivity = currentActivities.first(where: { $0.window.contains() }) {
+                print("🎯 [System Clock] السلوت النشط الآن بعد القفز بالوقت هو: (\(activeActivity.title))")
+                
+                Task {
+                    if let updatedScore = await healthKitManager.calculateMorningBaseline() {
+                        withAnimation {
+                            self.mockEnergyScore = updatedScore
+                            print("✅ [System Clock Sync] تم إعادة حساب الطاقة بنجاح للتايم سلوت الجديد: \(updatedScore)%")
+                        }
+                    }
+                }
+            }
         }
     }
     

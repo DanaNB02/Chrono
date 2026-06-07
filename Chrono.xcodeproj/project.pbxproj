@@ -398,7 +398,7 @@
 				CODE_SIGN_ENTITLEMENTS = Chrono/Chrono.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = X2UYR66749;
+				DEVELOPMENT_TEAM = L57X67ZBP6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Chrono needs access to your sleep and heart metrics to calculate your daily energy score baseline.";
@@ -412,7 +412,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = Dana.Chrono;
+				PRODUCT_BUNDLE_IDENTIFIER = Reema.Chrono;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -432,7 +432,7 @@
 				CODE_SIGN_ENTITLEMENTS = Chrono/Chrono.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = X2UYR66749;
+				DEVELOPMENT_TEAM = L57X67ZBP6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Chrono needs access to your sleep and heart metrics to calculate your daily energy score baseline.";
@@ -446,7 +446,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = Dana.Chrono;
+				PRODUCT_BUNDLE_IDENTIFIER = Reema.Chrono;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
