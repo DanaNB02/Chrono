@@ -2,7 +2,7 @@
 //  HealthKitManager.swift
 //  Chrono
 //
-//  Created by Dane on 18/12/1447 AH.
+//  Created by Reema on 18/12/1447 AH.
 //
 
 import Foundation
@@ -34,56 +34,71 @@ class HealthKitManager: ObservableObject {
     }
     
     /// The Core Math Matrix: Fetches metrics and computes the baseline 0-100 score
-        func calculateMorningBaseline() async -> Double? {
-            
-            // 🚨 SIMULATOR OVERRIDE IS ACTIVE FOR YOUR SUNDAY DEMO
-            #if targetEnvironment(simulator)
-            return 94.0
-            #else
-            
-            // PHYSICAL DEVICE LOGIC
-            let now = Date()
-            let calendar = Calendar.current
-            let twentyFourHoursAgo = calendar.date(byAdding: .hour, value: -24, to: now)!
-            let predicate = HKQuery.predicateForSamples(withStart: twentyFourHoursAgo, end: now, options: .strictStartDate)
-            
-            let sleepMinutes = await fetchLastNightSleep(predicate: predicate)
-            let hrvValue = await fetchLastHRV(predicate: predicate)
-            let rhrValue = await fetchLastRHR(predicate: predicate)
-            
-            // THE PRIVACY CHECK:
-            // If all three return nil, it means the user tapped "Don't Allow" or has zero data.
-            if sleepMinutes == nil && hrvValue == nil && rhrValue == nil {
-                return nil // This tells ContentView to show the "Health Data Unavailable" screen
-            }
-            
-            // If they DID allow it, we use their real data (or safe fallbacks if only one metric is missing)
-            let finalSleep = sleepMinutes ?? 450.0
-            let finalHRV = hrvValue ?? 50.0
-            let finalRHR = rhrValue ?? 65.0
-            
-            // The Math
-            let sleepScore = min((finalSleep / 480.0) * 50.0, 50.0)
-            let hrvScore = min((finalHRV / 50.0) * 30.0, 30.0)
-            let rhrScore = min((65.0 / finalRHR) * 20.0, 20.0)
-            
-            let totalScore = sleepScore + hrvScore + rhrScore
-            return min(max(totalScore, 0.0), 100.0)
-            
-            #endif
+    func calculateMorningBaseline() async -> Double? {
+        
+        // 🚨 SIMULATOR OVERRIDE FOR PREVIEWS / DEMOS
+        #if targetEnvironment(simulator)
+        return 94.0
+        #else
+        
+        print("\n📊 [HealthKit Engine] جاري بدء فحص البيانات الحيوية الفلكية...")
+        
+        let now = Date()
+        let calendar = Calendar.current
+        
+        // 💡 حل مشكلة الـ Predicate الصارم:
+        // نوسع النطاق لـ 36 ساعة لتغطية بداية وقت النوم ليلة أمس بالكامل، وألغينا خيار .strictStartDate لمرونة الجلب
+        let thirtySixHoursAgo = calendar.date(byAdding: .hour, value: -36, to: now)!
+        let generalPredicate = HKQuery.predicateForSamples(withStart: thirtySixHoursAgo, end: now, options: [])
+        
+        let sleepMinutes = await fetchLastNightSleep(predicate: generalPredicate)
+        let hrvValue = await fetchLastHRV(predicate: generalPredicate)
+        let rhrValue = await fetchLastRHR(predicate: generalPredicate)
+        
+        // طباعة تقرير المستشعرات في الـ Console لمراقبة عملية الجلب الحية
+        print("--------- 🩺 تقرير المستشعرات الحالية ---------")
+        if let sleep = sleepMinutes {
+            print("💤 ساعات النوم المجلوبة: \(String(format: "%.1f", sleep / 60.0)) ساعة (\(Int(sleep)) دقيقة)")
+        } else {
+            print("💤 ساعات النوم المجلوبة: ⚠️ لا توجد قراءة حية (سيتم استخدام الـ Fallback للأفرج بيرسون)")
         }
+        
+        print("❤️ قراءة HRV المجلوبة: \(hrvValue != nil ? "\(Int(hrvValue!)) ms" : "⚠️ لا توجد قراءة حية (سيتم استخدام الـ Fallback للأفرج بيرسون)")")
+        print("💓 قراءة RHR المجلوبة: \(rhrValue != nil ? "\(Int(rhrValue!)) bpm" : "⚠️ لا توجد قراءة حية (سيتم استخدام الـ Fallback للأفرج بيرسون)")")
+        print("---------------------------------------------")
+        
+        // THE PRIVACY CHECK:
+        if sleepMinutes == nil && hrvValue == nil && rhrValue == nil {
+            print("🚨 [HealthKit Engine] تم رفض الصلاحيات بالكامل أو لا توجد بيانات نهائياً.")
+            return nil
+        }
+        
+        let finalSleep = sleepMinutes ?? 450.0
+        let finalHRV = hrvValue ?? 50.0
+        let finalRHR = rhrValue ?? 65.0
+        
+        // المصفوفة الحسابية الرياضية (The Math Matrix)
+        let sleepScore = min((finalSleep / 480.0) * 50.0, 50.0)
+        let hrvScore = min((finalHRV / 50.0) * 30.0, 30.0)
+        let rhrScore = min((65.0 / finalRHR) * 20.0, 20.0)
+        
+        let totalScore = sleepScore + hrvScore + rhrScore
+        let finalRoundedScore = min(max(totalScore, 0.0), 100.0)
+        
+        print("🎯 [HealthKit Engine] السكور النهائي المحسوب للطاقة: \(Int(finalRoundedScore))%\n")
+        return finalRoundedScore
+        
+        #endif
+    }
     
     // MARK: - Background Fetch Helpers
-    // Notice these also have a 'Double?' so they can return nil instead of fake numbers
     
     private func fetchLastNightSleep(predicate: NSPredicate) async -> Double? {
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
-        let query = HKSampleQuery(sampleType: sleepType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sortDescriptor]) { _, samples, error in }
-        
         return await withCheckedContinuation { continuation in
             let sampleQuery = HKSampleQuery(sampleType: sleepType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sortDescriptor]) { _, samples, _ in
                 guard let sleepSamples = samples as? [HKCategorySample], !sleepSamples.isEmpty else {
-                    continuation.resume(returning: nil) // Returns nil instead of 420.0!
+                    continuation.resume(returning: nil)
                     return
                 }
                 
@@ -103,10 +118,10 @@ class HealthKitManager: ObservableObject {
         return await withCheckedContinuation { continuation in
             let query = HKSampleQuery(sampleType: hrvType, predicate: predicate, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
                 guard let sample = samples?.first as? HKQuantitySample else {
-                    continuation.resume(returning: nil) // Returns nil instead of 48.0!
+                    continuation.resume(returning: nil)
                     return
                 }
-                let hrvInMs = sample.quantity.doubleValue(for: HKUnit.secondUnit(with: .milli))
+                let hrvInMs = sample.quantity.doubleValue(for: HKUnit(from: "ms"))
                 continuation.resume(returning: hrvInMs)
             }
             healthStore.execute(query)
@@ -118,7 +133,7 @@ class HealthKitManager: ObservableObject {
         return await withCheckedContinuation { continuation in
             let query = HKSampleQuery(sampleType: rhrType, predicate: predicate, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
                 guard let sample = samples?.first as? HKQuantitySample else {
-                    continuation.resume(returning: nil) // Returns nil instead of 68.0!
+                    continuation.resume(returning: nil)
                     return
                 }
                 let bpm = sample.quantity.doubleValue(for: HKUnit(from: "count/min"))
