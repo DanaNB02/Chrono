@@ -1,8 +1,8 @@
 //
-//  ContentView.swift
-//  Chrono
+//   ContentView.swift
+//   Chrono
 //
-//  Created by Reema on 18/12/1447 AH.
+//   Created by Reema on 18/12/1447 AH.
 //
 
 import SwiftUI
@@ -128,7 +128,7 @@ struct ContentView: View {
                         .padding(.top, 30)
                     
                     ScrollView(showsIndicators: false) {
-                        VStack(spacing: 16) { // Spacing inside the scrollview container
+                        VStack(spacing: 12) { // توجيه المساحات بشكل متناسق داخلياً
                             
                             let userActivities = ScheduleEngine.getFullSchedule(for: userChronotype)
                             
@@ -153,7 +153,6 @@ struct ContentView: View {
                                             if let updatedScore = await healthKitManager.calculateMorningBaseline() {
                                                 withAnimation {
                                                     self.mockEnergyScore = updatedScore
-                                                    // طباعة تأكيد نجاح العملية وظهور النسبة الجديدة في الـ Console
                                                     print("✅ [Chrono Sync] نجحت المزامنة للسلوت الجديد! النسبة الحالية المحدثة: \(updatedScore)%")
                                                 }
                                             }
@@ -162,7 +161,8 @@ struct ContentView: View {
                                 }
                             }
                         }
-                        .padding(.bottom, 20) // Shrunk bottom padding so it doesn't clip
+                        .padding(.horizontal, 24) // حماية الكروت من الالتصاق التام بأطراف الشاشة الخارجية
+                        .padding(.bottom, 30)
                     }
                     
                     Spacer()
@@ -278,16 +278,16 @@ struct BioScheduleRow: View {
     let isActive: Bool
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             
             // Top Row: Time Range & Tag Pill
-            HStack {
+            HStack(alignment: .center) {
                 Text(timeRange)
                     .font(.subheadline)
                     .fontWeight(.bold)
                     .foregroundColor(isActive ? .white : .white.opacity(0.5))
                 
-                Spacer()
+                Spacer(minLength: 16) // مسافة أمان عازلة تمنع التداخل البصري
                 
                 Text(tag)
                     .font(.caption)
@@ -304,22 +304,23 @@ struct BioScheduleRow: View {
                 .font(isActive ? .title2 : .title3)
                 .fontWeight(.bold)
                 .foregroundColor(isActive ? .white : .white.opacity(0.8))
+                .fixedSize(horizontal: false, vertical: true) // تمدد رأسي يمنع القص والنقاط
             
-            // Suggestion (Only renders if the block is active and has text)
+            // Suggestion (Only renders if active)
             if isActive, let activeSuggestion = suggestion {
                 Text(activeSuggestion)
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.9))
-                    // THIS is the magic modifier that forces text to wrap instead of cutting off
                     .fixedSize(horizontal: false, vertical: true)
                     .lineSpacing(4)
                     .padding(.top, 2)
             }
         }
-        .padding(isActive ? 16 : 0)
-        .background(isActive ? Color.white.opacity(0.15) : Color.clear)
-        .cornerRadius(20)
-        .padding(.horizontal, isActive ? 0 : 16)
+        .padding(16) 
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(isActive ? Color.white.opacity(0.15) : Color.clear) // شفاف لغير النشط كالتصميم الأساسي الفخم
+        )
     }
 }
 
