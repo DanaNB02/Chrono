@@ -12,7 +12,7 @@ struct QuizView: View {
     
     // Using @State because your ViewModel uses the modern @Observable macro
     @State private var viewModel = QuizViewModel()
-    
+//    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = true
     var body: some View {
         ZStack {
             // 1. The Dark Gradient Background
