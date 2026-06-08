@@ -1,21 +1,12 @@
-//
-//  QuizView.swift
-//  Chrono
-//
-//  Created by Dana on 18/12/1447 AH.
-//
-
 import SwiftUI
 
 struct QuizView: View {
     @Environment(\.dismiss) var dismiss
-    
-    // Using @State because your ViewModel uses the modern @Observable macro
     @State private var viewModel = QuizViewModel()
-//    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = true
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = true
+    
     var body: some View {
         ZStack {
-            // 1. The Dark Gradient Background
             LinearGradient(
                 colors: [
                     Color(red: 0.12, green: 0.16, blue: 0.22),
@@ -26,19 +17,17 @@ struct QuizView: View {
             )
             .ignoresSafeArea()
             
-            // Safety check: Only show the quiz if we haven't finished
             if viewModel.currentIndex < viewModel.questions.count && viewModel.finalResult == nil {
-                
                 let currentQ = viewModel.questions[viewModel.currentIndex]
                 
                 VStack(alignment: .leading, spacing: 30) {
-                    
-                    // 2. Custom Back Button
                     Button(action: {
                         if viewModel.currentIndex > 0 {
                             viewModel.goBack()
                         } else {
-                            dismiss()
+                            withAnimation(.easeInOut(duration: 0.4)) {
+                                hasCompletedOnboarding = false
+                            }
                         }
                     }) {
                         Image(systemName: "chevron.left")
@@ -51,9 +40,8 @@ struct QuizView: View {
                     }
                     .padding(.top, 10)
                     
-                    // 3. Progress Indicator
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Question \(viewModel.currentIndex + 1) \\ \(viewModel.questions.count)")
+                        Text("Question \(viewModel.currentIndex + 1) / \(viewModel.questions.count)")
                             .font(.headline)
                             .foregroundColor(.white)
                             .contentTransition(.numericText())
@@ -77,7 +65,6 @@ struct QuizView: View {
                     }
                     .padding(.bottom, 10)
                     
-                    // 4. Dynamic Question Text
                     VStack(alignment: .leading, spacing: 12) {
                         Text("answer to what feels more accurate to you")
                             .font(.subheadline)
@@ -86,18 +73,15 @@ struct QuizView: View {
                         Text(currentQ.text)
                             .font(.system(size: 28, weight: .bold, design: .default))
                             .foregroundColor(.white)
-                            .id(viewModel.currentIndex) // Forces a clean fade animation when text changes
+                            .id(viewModel.currentIndex)
                             .transition(.opacity.combined(with: .scale(scale: 0.98)))
                     }
                     .padding(.bottom, 20)
                     
-                    // 5. Dynamic Answer Buttons
                     VStack(spacing: 16) {
-                        // Loops through the options and creates exactly the right number of buttons
                         ForEach(currentQ.options) { option in
                             QuizOptionButton(
                                 title: option.text,
-                                // Give visual feedback if this specific button was just tapped
                                 isSelected: viewModel.selectedOptionId == option.id
                             ) {
                                 viewModel.selectOption(option: option)
@@ -106,29 +90,27 @@ struct QuizView: View {
                     }
                     
                     Spacer()
-                                    }
-                                    .padding(.horizontal, 24)
+                }
+                .padding(.horizontal, 24)
+                
             } else if let result = viewModel.finalResult {
-                            
-                            ChronotypeResultView(chronotype: result) {
-                                // This fires the save, which triggers the AppStorage router to show the Dashboard!
-                                viewModel.confirmAndGoToDashboard()
-                            }
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
-                                    
-                                } else {
-                                    // Just a micro-second fallback while it calculates
-                                    VStack {
-                                        ProgressView()
-                                            .tint(.white)
-                                            .scaleEffect(1.5)
-                                    }
-                                }
-                            }
-                            .navigationBarHidden(true)
-                        }
-                    }
-// MARK: - Reusable Custom Button Component
+                ChronotypeResultView(chronotype: result) {
+                    viewModel.confirmAndGoToDashboard()
+                }
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                
+            } else {
+                VStack {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(1.5)
+                }
+            }
+        }
+        .navigationBarHidden(true)
+    }
+}
+
 struct QuizOptionButton: View {
     let title: String
     let isSelected: Bool
@@ -145,7 +127,6 @@ struct QuizOptionButton: View {
             }
             .padding(.horizontal, 24)
             .frame(height: 64)
-            // Changes color slightly when tapped to give the user feedback
             .background(isSelected ? Color.white : Color(red: 0.30, green: 0.34, blue: 0.40))
             .cornerRadius(16)
             .overlay(
@@ -156,8 +137,4 @@ struct QuizOptionButton: View {
             .animation(.easeInOut(duration: 0.2), value: isSelected)
         }
     }
-}
-
-#Preview {
-    QuizView()
 }
