@@ -30,13 +30,13 @@ struct ChronotypeResultView: View {
                 // 2. Custom Back Button
                 HStack {
                     Button(action: { dismiss() }) {
-                        Image(systemName: "chevron.left")
-                            .font(.title3)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.white)
-                            .frame(width: 44, height: 44)
-                            .background(Color.white.opacity(0.15))
-                            .clipShape(Circle())
+//                        Image(systemName: "chevron.left")
+//                            .font(.title3)
+//                            .fontWeight(.semibold)
+//                            .foregroundColor(.white)
+//                            .frame(width: 44, height: 44)
+//                            .background(Color.white.opacity(0.15))
+//                            .clipShape(Circle())
                     }
                     Spacer()
                 }
