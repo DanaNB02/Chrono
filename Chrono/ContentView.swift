@@ -23,7 +23,15 @@ struct ContentView: View {
     var currentDayString: String {
         Date().formatted(.dateTime.weekday(.wide))
     }
-    
+    // Dynamic Greeting Logic
+    var greetingMessage: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        switch hour {
+        case 0..<12: return "Good Morning"
+        case 12..<17: return "Good Afternoon"
+        default: return "Good Evening"
+        }
+    }
     // Dynamic Ring Color Logic
     var ringColor: Color {
         guard let score = mockEnergyScore else { return .gray }
@@ -47,7 +55,8 @@ struct ContentView: View {
                         Text(currentDayString)
                             .font(.title3)
                             .foregroundColor(.white.opacity(0.8))
-                        Text("Good Morning")
+                        
+                        Text(greetingMessage)
                             .font(.system(size: 32, weight: .bold))
                             .foregroundColor(.white)
                     }
@@ -63,6 +72,7 @@ struct ContentView: View {
                             .background(Color.white.opacity(0.1))
                             .clipShape(Circle())
                     }
+                    .disabled(true) //TODO
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 60) // Clears the Dynamic Island safely
