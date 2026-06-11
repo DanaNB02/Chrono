@@ -48,7 +48,7 @@ struct SplashScreenView: View {
                 VStack(spacing: 25) {
                     ZStack {
                       
-                        Image("AppLogo")
+                        Image("icon")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 170, height: 170)
