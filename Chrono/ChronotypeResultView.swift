@@ -18,30 +18,23 @@ struct ChronotypeResultView: View {
     
     var body: some View {
         ZStack {
-            // 1. Dynamic Background Gradient
-            LinearGradient(
-                colors: themeColors,
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            // 1. Dynamic Background Image from Figma
+            Image(backgroundImageName)
+                .resizable()
+                .scaledToFill()
+                .ignoresSafeArea()
             
             VStack {
                 // 2. Custom Back Button
                 HStack {
                     Button(action: { dismiss() }) {
-//                        Image(systemName: "chevron.left")
-//                            .font(.title3)
-//                            .fontWeight(.semibold)
-//                            .foregroundColor(.white)
-//                            .frame(width: 44, height: 44)
-//                            .background(Color.white.opacity(0.15))
-//                            .clipShape(Circle())
+                        // Your back button content stays here
                     }
                     Spacer()
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 10)
+                
                 
                 Spacer()
                 
@@ -95,6 +88,17 @@ struct ChronotypeResultView: View {
     }
     
     // MARK: - Dynamic Theme Engine
+    
+    private var backgroundImageName: String {
+        switch chronotype {
+        case .dolphin: return "bg_dolphin"
+        case .wolf:    return "bg_wolf"
+        case .bear:    return "bg_bear"
+        case .lion:    return "bg_lion"
+        }
+    }
+    
+    
     // Automatically updates the UI based on the Chronotype
     
     private var themeColors: [Color] {

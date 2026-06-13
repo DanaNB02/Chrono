@@ -24,7 +24,7 @@ enum EnergyDemand {
 
 enum ActivityCategory: String {
     case sleep = "Sleep Schedule"
-    case workday = "Workday"
+    case workday = "Work Time"
     case relationships = "Relationships"
     case fueling = "Sip, Snack, and Splurge"
     case fitness = "Fitness Goals"
@@ -56,7 +56,6 @@ struct TimeWindow {
         return currentTotalMinutes >= startTotalMinutes && currentTotalMinutes < endTotalMinutes
     }
     
-    // Helper to easily display "7:00 AM - 9:00 AM" in your UI later
     var displayString: String {
         let startPeriod = startHour >= 12 ? "PM" : "AM"
         let endPeriod = endHour >= 12 ? "PM" : "AM"
@@ -71,8 +70,6 @@ struct TimeWindow {
     }
 }
 
-
-
 // MARK: - Core Model
 
 struct ChronotypeActivity: Identifiable {
@@ -81,23 +78,39 @@ struct ChronotypeActivity: Identifiable {
     let category: ActivityCategory
     let window: TimeWindow
     let expectedDemand: EnergyDemand
+    let isInterlap: Bool
     
-    // The customized UI strings based on the 50% HealthKit threshold
-    let highEnergySuggestion: String
-    let lowEnergySuggestion: String
-    
-    /// The logic engine calls this to get the exact text for the UI
+    /// Dynamically compares the activity's expected demand against the live HealthKit physical score
     func getSuggestion(actualEnergyScore: Int?) -> String {
         guard let score = actualEnergyScore else {
-            // Fallback if they denied HealthKit (gray circle)
             return "According to your chronotype, this is an ideal time for this activity. (Enable HealthKit to see live energy adjustments)."
         }
         
-        // The 50% Pivot Point
-        if score >= 50 {
-            return highEnergySuggestion
-        } else {
-            return lowEnergySuggestion
+        let isUserEnergyHigh = score >= 50
+        
+        switch expectedDemand {
+        case .high:
+            if isUserEnergyHigh {
+                return "This is your absolute peak, and your energy is high."
+            } else {
+                return "Your energy is running low for this peak window. Pace yourself with tiny, manageable steps."
+            }
+            
+        case .low, .neutral:
+            if isUserEnergyHigh {
+                if title.contains("Bedtime") || title.contains("Wind Down") || title.contains("Routine") {
+                    return "Your energy is still quite high for bedtime! Channel this extra buzz into quiet reading or journaling to help your system unwind."
+                } else if category == .fueling {
+                    return "Your energy is solid. Use this meal or break to pace your baseline without overstimulating."
+                } else {
+                    return "You have an energy surplus right now! Enjoy this light window without overextending your focus."
+                }
+            } else {
+                if category == .fueling {
+                    return "Fuel up with clean choices to keep your blood sugar steady through this window."
+                }
+                return "Perfect timing. Your battery is recharging naturally right now."
+            }
         }
     }
 }
