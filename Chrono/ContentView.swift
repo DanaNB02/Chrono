@@ -18,9 +18,9 @@ struct ContentView: View {
     @StateObject private var healthKitManager = HealthKitManager()
     
     // MARK: - Logging Sheet State
-    @State private var showLoggingSheet = false
-    @State private var coffeeAmount: Double = 250.0
-    @State private var carbAmount: Double = 100.0
+//    @State private var showLoggingSheet = false
+//    @State private var coffeeAmount: Double = 250.0
+//    @State private var carbAmount: Double = 100.0
     
     // MARK: - Isolated Sub-expressions for Scope and Compiler Health
     private var allActivities: [ChronotypeActivity] {
@@ -80,7 +80,8 @@ struct ContentView: View {
                     Spacer()
                     
                     // The Custom Figma Asset Profile Button at top right
-                    Button(action: { showLoggingSheet = true }) {
+//                    Button(action: { showLoggingSheet = true })
+////                    {
                         Image(emojiImageName)
                             .resizable()
                             .scaledToFit()
@@ -89,7 +90,7 @@ struct ContentView: View {
                             .padding(8)
                             .background(Color.white.opacity(0.08))
                             .clipShape(Circle())
-                    }
+//                    }
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 60)
@@ -241,16 +242,16 @@ struct ContentView: View {
         .task {
             await loadEnergyScoreOnLaunch()
         }
-        .sheet(isPresented: $showLoggingSheet) {
-            LoggingSheetView(
-                coffeeAmount: $coffeeAmount,
-                carbAmount: $carbAmount,
-                onLogCoffee: { logExactCoffee() },
-                onLogCarbs: { logExactCarbs() }
-            )
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-        }
+//        .sheet(isPresented: $showLoggingSheet) {
+//            LoggingSheetView(
+//                coffeeAmount: $coffeeAmount,
+//                carbAmount: $carbAmount,
+//                onLogCoffee: { logExactCoffee() },
+//                onLogCarbs: { logExactCarbs() }
+//            )
+//            .presentationDetents([.medium])
+//            .presentationDragIndicator(.visible)
+//        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
             print("⏰ [System Clock] تم رصد تغيير يدوي في وقت النظام! جاري إعادة تقييم الفترات حيوياً...")
             refreshEnergyScore(reason: "System Clock Sync")
@@ -306,25 +307,25 @@ struct ContentView: View {
     }
     
     // MARK: - Math Engines
-    private func logExactCoffee() {
-        let pointsToAdd = (coffeeAmount / 250.0) * 15.0
-        adjustEnergy(by: pointsToAdd)
-        showLoggingSheet = false
-    }
-    
-    private func logExactCarbs() {
-        let pointsToSubtract = (carbAmount / 100.0) * -10.0
-        adjustEnergy(by: pointsToSubtract)
-        showLoggingSheet = false
-    }
-    
-    private func adjustEnergy(by amount: Double) {
-        guard let currentScore = dynamicEnergyScore else { return }
-        withAnimation {
-            let newScore = currentScore + amount
-            dynamicEnergyScore = min(max(newScore, 0.0), 100.0)
-        }
-    }
+//    private func logExactCoffee() {
+//        let pointsToAdd = (coffeeAmount / 250.0) * 15.0
+//        adjustEnergy(by: pointsToAdd)
+//        showLoggingSheet = false
+//    }
+//    
+//    private func logExactCarbs() {
+//        let pointsToSubtract = (carbAmount / 100.0) * -10.0
+//        adjustEnergy(by: pointsToSubtract)
+//        showLoggingSheet = false
+//    }
+//    
+//    private func adjustEnergy(by amount: Double) {
+//        guard let currentScore = dynamicEnergyScore else { return }
+//        withAnimation {
+//            let newScore = currentScore + amount
+//            dynamicEnergyScore = min(max(newScore, 0.0), 100.0)
+//        }
+//    }
     
     // MARK: - Themes & Assets
     private var backgroundImageName: String {

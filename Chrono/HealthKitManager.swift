@@ -116,24 +116,89 @@ class HealthKitManager: ObservableObject {
     // MARK: - Background Fetch Queries
     
     private func fetchLastNightSleep(predicate: NSPredicate) async -> Double? {
-        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+
         return await withCheckedContinuation { continuation in
-            let sampleQuery = HKSampleQuery(sampleType: sleepType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sortDescriptor]) { _, samples, _ in
-                guard let sleepSamples = samples as? [HKCategorySample], !sleepSamples.isEmpty else {
+            let query = HKSampleQuery(
+                sampleType: sleepType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [sortDescriptor]
+            ) { _, samples, _ in
+
+                guard let samples = samples as? [HKCategorySample], !samples.isEmpty else {
                     continuation.resume(returning: nil)
                     return
                 }
-                let totalAsleepTime = sleepSamples
-                    .filter { $0.value == HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue || $0.value == HKCategoryValueSleepAnalysis.asleepCore.rawValue || $0.value == HKCategoryValueSleepAnalysis.asleepDeep.rawValue || $0.value == HKCategoryValueSleepAnalysis.asleepREM.rawValue }
-                    .reduce(0.0) { $0 + $1.endDate.timeIntervalSince($1.startDate) }
-                
-                let minutes = totalAsleepTime / 60.0
-                continuation.resume(returning: minutes > 0 ? minutes : nil)
+
+                let asleepValues: Set<Int> = [
+                    HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepCore.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepDeep.rawValue,
+                    HKCategoryValueSleepAnalysis.asleepREM.rawValue
+                ]
+
+                let asleepIntervals = samples
+                    .filter { asleepValues.contains($0.value) }
+                    .map { (start: $0.startDate, end: $0.endDate) }
+                    .sorted { $0.start < $1.start }
+
+                guard !asleepIntervals.isEmpty else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                let maxGap: TimeInterval = 2 * 60 * 60
+                var sessions: [[(start: Date, end: Date)]] = []
+                var currentSession: [(start: Date, end: Date)] = []
+
+                for interval in asleepIntervals {
+                    if let last = currentSession.last {
+                        let gap = interval.start.timeIntervalSince(last.end)
+
+                        if gap <= maxGap {
+                            currentSession.append(interval)
+                        } else {
+                            sessions.append(currentSession)
+                            currentSession = [interval]
+                        }
+                    } else {
+                        currentSession = [interval]
+                    }
+                }
+
+                if !currentSession.isEmpty {
+                    sessions.append(currentSession)
+                }
+
+                let bestSession = sessions.max { first, second in
+                    let firstMinutes = first.reduce(0.0) {
+                        $0 + $1.end.timeIntervalSince($1.start)
+                    }
+                    let secondMinutes = second.reduce(0.0) {
+                        $0 + $1.end.timeIntervalSince($1.start)
+                    }
+                    return firstMinutes < secondMinutes
+                }
+
+                guard let session = bestSession else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                let totalMinutes = session.reduce(0.0) {
+                    $0 + $1.end.timeIntervalSince($1.start)
+                } / 60.0
+
+                print("🛌 Sleep session intervals count: \(session.count)")
+                print("🧮 Apple-like sleep minutes: \(Int(totalMinutes))")
+
+                continuation.resume(returning: totalMinutes > 0 ? totalMinutes : nil)
             }
-            healthStore.execute(sampleQuery)
+
+            healthStore.execute(query)
         }
     }
-    
     private func fetchLastHRV(predicate: NSPredicate) async -> Double? {
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
         return await withCheckedContinuation { continuation in
