@@ -42,77 +42,77 @@ class HealthKitManager: ObservableObject {
     }
     
     /// The Updated Core Math Matrix with Real-Time Console Telemetry
-        func calculateLiveEnergyScore() async -> Double? {
-            
-            #if targetEnvironment(simulator)
-            print("ℹ️ [HealthKit Engine] Running on Simulator - Returning empty/nil to trigger baseline flow.")
-            return nil
-            #else
-            
-            print("\n📊 [HealthKit Engine] جاري بدء فحص البيانات الحيوية الفلكية والنشاط اليومي...")
-            
-            let now = Date()
-            let calendar = Calendar.current
-            
-            // Time window predicates
-            let thirtySixHoursAgo = calendar.date(byAdding: .hour, value: -36, to: now)!
-            let generalPredicate = HKQuery.predicateForSamples(withStart: thirtySixHoursAgo, end: now, options: [])
-            let todayPredicate = HKQuery.predicateForSamples(withStart: calendar.startOfDay(for: now), end: now, options: [])
-            
-            // Fetch raw values from Apple Health
-            let sleepMinutes = await fetchLastNightSleep(predicate: generalPredicate)
-            let hrvValue = await fetchLastHRV(predicate: generalPredicate)
-            let rhrValue = await fetchLastRHR(predicate: generalPredicate)
-            let activeCalories = await fetchTodayActiveCalories(predicate: todayPredicate)
-            let hrSpikes = await fetchTodayHeartRateSpikes(predicate: todayPredicate, baselineRHR: rhrValue ?? 65.0)
-            
-            // --------- 🩺 تقرير المستشعرات الحالية والمستخرجة ---------
-            print("--------- 🩺 تقرير المستشعرات الحالية ---------")
-            if let sleep = sleepMinutes {
-                print("💤 ساعات النوم المجلوبة: \(String(format: "%.1f", sleep / 60.0)) ساعة (\(Int(sleep)) دقيقة)")
-            } else {
-                print("💤 ساعات النوم المجلوبة: ⚠️ لا توجد قراءة حية لليوم")
-            }
-            
-            print("❤️ قراءة HRV المجلوبة: \(hrvValue != nil ? "\(Int(hrvValue!)) ms" : "⚠️ لا توجد قراءة حية لليوم")")
-            print("🔥 السعرات الحرارية النشطة اليوم: \(activeCalories != nil ? "\(Int(activeCalories!)) kcal" : "⚠️ لا توجد قراءة حية لليوم")")
-            print("⚡️ نبضات القلب المرتفعة المتسارعة (Spikes): \(hrSpikes)")
-            print("---------------------------------------------")
-            
-            // Privacy Guard
-            if sleepMinutes == nil && hrvValue == nil && activeCalories == nil {
-                print("🚨 [HealthKit Engine] تم رفض الصلاحيات بالكامل أو لا توجد بيانات نهائياً.")
-                return nil
-            }
-            
-            // Calculations Configuration
-            let sleepActual = sleepMinutes ?? 420.0
-            let sleepGoal = 480.0
-            let hrvActual = hrvValue ?? 45.0
-            let hrvBaseline = 50.0
-            let activeCalorieBurn = activeCalories ?? 0.0
-            let calorieTarget = 500.0
-            let totalSpikes = Double(hrSpikes)
-            
-            // Mathematical Subscores
-            let sleepPart = (sleepActual / sleepGoal) * 50.0
-            let hrvPart = (hrvActual / hrvBaseline) * 50.0
-            let recoveryScore = min(sleepPart + hrvPart, 100.0)
-            
-            let caloriePart = (activeCalorieBurn / calorieTarget) * 40.0
-            let spikePart = totalSpikes * 20.0
-            let exertionScore = caloriePart + spikePart
-            
-            // Final Balance
-            let finalScore = recoveryScore - (exertionScore * 0.5)
-            let boundedFinalScore = min(max(finalScore, 0.0), 100.0)
-            
-            print("🎯 [HealthKit Engine] السكور النهائي المحسوب للطاقة: \(Int(boundedFinalScore))%\n")
-            return boundedFinalScore
-            
-            #endif
+    func calculateLiveEnergyScore() async -> Double? {
+        
+        #if targetEnvironment(simulator)
+        print("ℹ️ [HealthKit Engine] Running on Simulator - Returning empty/nil to trigger baseline flow.")
+        return nil
+        #else
+        
+        print("\n📊 [HealthKit Engine] جاري بدء فحص البيانات الحيوية الفلكية والنشاط اليومي...")
+        
+        let now = Date()
+        let calendar = Calendar.current
+        
+        // Time window predicates
+        let thirtySixHoursAgo = calendar.date(byAdding: .hour, value: -36, to: now)!
+        let generalPredicate = HKQuery.predicateForSamples(withStart: thirtySixHoursAgo, end: now, options: [])
+        let todayPredicate = HKQuery.predicateForSamples(withStart: calendar.startOfDay(for: now), end: now, options: [])
+        
+        // Fetch raw values from Apple Health
+        let sleepMinutes = await fetchLastNightSleep(predicate: generalPredicate)
+        let hrvValue = await fetchLastHRV(predicate: generalPredicate)
+        let rhrValue = await fetchLastRHR(predicate: generalPredicate)
+        let activeCalories = await fetchTodayActiveCalories(predicate: todayPredicate)
+        let hrSpikes = await fetchTodayHeartRateSpikes(predicate: todayPredicate, baselineRHR: rhrValue ?? 65.0)
+        
+        print("--------- 🩺 تقرير المستشعرات الحالية ---------")
+        if let sleep = sleepMinutes {
+            print("💤 ساعات النوم المجلوبة: \(String(format: "%.1f", sleep / 60.0)) ساعة (\(Int(sleep)) دقيقة)")
+        } else {
+            print("💤 ساعات النوم المجلوبة: ⚠️ لا توجد قراءة حية لليوم")
         }
-    
+        
+        print("❤️ قراءة HRV المجلوبة: \(hrvValue != nil ? "\(Int(hrvValue!)) ms" : "⚠️ لا توجد قراءة حية لليوم")")
+        print("🔥 السعرات الحرارية النشطة اليوم: \(activeCalories != nil ? "\(Int(activeCalories!)) kcal" : "⚠️ لا توجد قراءة حية لليوم")")
+        print("⚡️ نبضات القلب المرتفعة المتسارعة (Spikes): \(hrSpikes)")
+        print("---------------------------------------------")
+        
+        // Privacy Guard
+        guard let sleepActual = sleepMinutes,
+              let hrvActual = hrvValue else {
+            print("🚨 [HealthKit Engine] لا توجد بيانات كافية لحساب Energy Score.")
+            return nil
+        }
+        
+        // Calculations Configuration
+        let sleepGoal = 480.0
+        let hrvBaseline = 50.0
+        let activeCalorieBurn = activeCalories ?? 0.0
+        let calorieTarget = 500.0
+        let totalSpikes = Double(hrSpikes)
+        
+        // Recovery
+        let sleepPart = min((sleepActual / sleepGoal) * 50.0, 50.0)
+        let hrvPart = min((hrvActual / hrvBaseline) * 50.0, 50.0)
+        let recoveryScore = sleepPart + hrvPart
+        
+        // Exertion
+        let caloriePart = min((activeCalorieBurn / calorieTarget) * 40.0, 40.0)
+        let spikePart = totalSpikes * 20.0
+        let exertionScore = caloriePart + spikePart
+        
+        // Energy Score
+        let finalScore = recoveryScore - (exertionScore * 0.5)
+        let boundedFinalScore = min(max(finalScore, 0.0), 100.0)
+        
+        print("🟢 Recovery: \(Int(recoveryScore)) | 🔥 Exertion: \(Int(exertionScore))")
+        print("🎯 [HealthKit Engine] السكور النهائي المحسوب للطاقة: \(Int(boundedFinalScore))%\n")
+        
+        return boundedFinalScore
+        
+        #endif
+    }
     // MARK: - Background Fetch Queries
     
     private func fetchLastNightSleep(predicate: NSPredicate) async -> Double? {

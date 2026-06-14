@@ -256,11 +256,12 @@ struct ContentView: View {
             print("⏰ [System Clock] تم رصد تغيير يدوي في وقت النظام! جاري إعادة تقييم الفترات حيوياً...")
             refreshEnergyScore(reason: "System Clock Sync")
         }
-        .alert("No Energy Data Yet", isPresented: $showEnergyInfo) {
+        .alert("Energy Score Unavailable", isPresented: $showEnergyInfo) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text("Chrono could not calculate your Energy Score yet. This may happen if Health access is off, Apple Watch was not worn today, or Sleep, HRV, and Active Energy data are not available.")
-        }
+            Text("Chrono needs Sleep and Heart Rate Variability (HRV) data from Apple Health to calculate your Energy Score. If no score appears, check that Health permissions are enabled and that your Apple Watch has recorded recent sleep and HRV data")
+
+                         }
     }
     
     // MARK: - Energy Loading
