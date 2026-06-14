@@ -13,7 +13,7 @@ class ScheduleEngine {
     static let lionSchedule: [ChronotypeActivity] = [
         ChronotypeActivity(title: "Wake Up", category: .sleep, window: TimeWindow(startHour: 5, startMinute: 30, endHour: 6, endMinute: 0), expectedDemand: .low, isInterlap: false),
         ChronotypeActivity(title: "Breakfast (High-protein)", category: .fueling, window: TimeWindow(startHour: 6, startMinute: 0, endHour: 7, endMinute: 0), expectedDemand: .neutral, isInterlap: false),
-        ChronotypeActivity(title: "Gentle Movement (Yoga/Stretching)", category: .fitness, window: TimeWindow(startHour: 8, startMinute: 0, endHour: 9, endMinute: 0), expectedDemand: .low, isInterlap: false),
+//        ChronotypeActivity(title: "Gentle Movement (Yoga/Stretching)", category: .fitness, window: TimeWindow(startHour: 8, startMinute: 0, endHour: 9, endMinute: 0), expectedDemand: .low, isInterlap: false),
         ChronotypeActivity(title: "Deep Focus & Heavy Task", category: .workday, window: TimeWindow(startHour: 8, startMinute: 0, endHour: 12, endMinute: 0), expectedDemand: .high, isInterlap: false),
         
         // Nested micro events inside Deep Focus & Heavy Task

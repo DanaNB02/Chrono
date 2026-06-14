@@ -1,8 +1,8 @@
 //
-//  ChronotypeResultView.swift
-//  Chrono
+//   ChronotypeResultView.swift
+//   Chrono
 //
-//  Created by Dana on 21/12/1447 AH.
+//   Created by Dana on 21/12/1447 AH.
 //
 
 import SwiftUI
@@ -29,12 +29,15 @@ struct ChronotypeResultView: View {
                 HStack {
                     Button(action: { dismiss() }) {
                         // Your back button content stays here
+                        Image(systemName: "chevron.left")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
                     }
                     Spacer()
                 }
                 .padding(.horizontal, 24)
                 .padding(.top, 10)
-                
                 
                 Spacer()
                 
@@ -45,8 +48,11 @@ struct ChronotypeResultView: View {
                         .tracking(2) // Adds premium letter spacing
                         .foregroundColor(.white.opacity(0.8))
                     
-                    Text(emoji)
-                        .font(.system(size: 110))
+                    // 🌟 CHANGED FROM TEXT TO YOUR CUSTOM FIGMA IMAGE ASSETS
+                    Image(emojiImageName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 220, height: 220) // Beautiful large display frame for the result screen
                         .shadow(color: .black.opacity(0.25), radius: 15, x: 0, y: 10)
                         .padding(.bottom, 8)
                     
@@ -98,37 +104,22 @@ struct ChronotypeResultView: View {
         }
     }
     
-    
-    // Automatically updates the UI based on the Chronotype
-    
-    private var themeColors: [Color] {
+    // 🌟 YOUR BRAND NEW CUSTOM IMAGE NAME RESOLVER MATCHING ASSETS
+    private var emojiImageName: String {
         switch chronotype {
-        case .dolphin:
-            return [Color(red: 0.10, green: 0.45, blue: 0.60), Color(red: 0.05, green: 0.20, blue: 0.30)]
-        case .wolf:
-            return [Color(red: 0.20, green: 0.15, blue: 0.35), Color(red: 0.10, green: 0.10, blue: 0.20)]
-        case .bear:
-            return [Color(red: 0.35, green: 0.20, blue: 0.10), Color(red: 0.20, green: 0.12, blue: 0.05)]
-        case .lion:
-            return [Color(red: 0.95, green: 0.65, blue: 0.15), Color(red: 0.85, green: 0.40, blue: 0.05)]
-        }
-    }
-    
-    private var emoji: String {
-        switch chronotype {
-        case .dolphin: return "🐬"
-        case .wolf: return "🐺"
-        case .bear: return "🐻"
-        case .lion: return "🦁"
+        case .dolphin: return "dolphin_emoji"
+        case .wolf:    return "wolf_emoji"
+        case .bear:    return "bear_emoji"
+        case .lion:    return "lion_emoji"
         }
     }
     
     private var titleText: String {
         switch chronotype {
         case .dolphin: return "DOLPHIN"
-        case .wolf: return "WOLF"
-        case .bear: return "BEAR"
-        case .lion: return "LION"
+        case .wolf:    return "WOLF"
+        case .bear:    return "BEAR"
+        case .lion:    return "LION"
         }
     }
     
