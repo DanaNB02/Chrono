@@ -2,36 +2,43 @@
 //  HealthKitManager.swift
 //  Chrono
 //
-//  Created by Reema on 18/12/1447 AH.
+//  Updated Energy Formula:
+//  Morning Recovery + Energy Drain
 //
 
 import Foundation
 import HealthKit
 import Combine
 
+struct SleepScoreResult {
+    let totalScore: Double
+    let durationScore: Double
+    let timingScore: Double
+    let interruptionScore: Double
+    let sleepMinutes: Double
+    let usesTiming: Bool
+}
+
 class HealthKitManager: ObservableObject {
-    
+
     let healthStore = HKHealthStore()
-    
+
     // MARK: - Health Types to Read
     private let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
     private let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!
-    private let rhrType = HKQuantityType.quantityType(forIdentifier: .restingHeartRate)!
     private let activeCaloriesType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!
-    private let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate)!
-    
-    /// Requests access to Apple Health
+
+    // MARK: - Authorization
+
     func requestAuthorization() async -> Bool {
         guard HKHealthStore.isHealthDataAvailable() else { return false }
-        
+
         let typesToRead: Set<HKObjectType> = [
             sleepType,
             hrvType,
-            rhrType,
-            activeCaloriesType,
-            heartRateType
+            activeCaloriesType
         ]
-        
+
         do {
             try await healthStore.requestAuthorization(toShare: [], read: typesToRead)
             return true
@@ -40,82 +47,106 @@ class HealthKitManager: ObservableObject {
             return false
         }
     }
-    
-    /// The Updated Core Math Matrix with Real-Time Console Telemetry
+
+    // MARK: - Energy Score
+
     func calculateLiveEnergyScore() async -> Double? {
-        
+
         #if targetEnvironment(simulator)
-        print("ℹ️ [HealthKit Engine] Running on Simulator - Returning empty/nil to trigger baseline flow.")
+        print("ℹ️ [HealthKit Engine] Running on Simulator - Returning empty/nil to trigger empty state.")
         return nil
         #else
-        
-        print("\n📊 [HealthKit Engine] جاري بدء فحص البيانات الحيوية الفلكية والنشاط اليومي...")
-        
+
+        print("\n📊 [HealthKit Engine] Starting Morning Recovery + Energy Drain calculation...")
+
         let now = Date()
         let calendar = Calendar.current
-        
-        // Time window predicates
+
         let thirtySixHoursAgo = calendar.date(byAdding: .hour, value: -36, to: now)!
-        let generalPredicate = HKQuery.predicateForSamples(withStart: thirtySixHoursAgo, end: now, options: [])
+        let fourteenDaysAgo = calendar.date(byAdding: .day, value: -14, to: now)!
+
+        let sleepPredicate = HKQuery.predicateForSamples(withStart: thirtySixHoursAgo, end: now, options: [])
+        let hrvRecentPredicate = HKQuery.predicateForSamples(withStart: thirtySixHoursAgo, end: now, options: [])
+        let hrvBaselinePredicate = HKQuery.predicateForSamples(withStart: fourteenDaysAgo, end: now, options: [])
         let todayPredicate = HKQuery.predicateForSamples(withStart: calendar.startOfDay(for: now), end: now, options: [])
-        
-        // Fetch raw values from Apple Health
-        let sleepMinutes = await fetchLastNightSleep(predicate: generalPredicate)
-        let hrvValue = await fetchLastHRV(predicate: generalPredicate)
-        let rhrValue = await fetchLastRHR(predicate: generalPredicate)
-        let activeCalories = await fetchTodayActiveCalories(predicate: todayPredicate)
-        let hrSpikes = await fetchTodayHeartRateSpikes(predicate: todayPredicate, baselineRHR: rhrValue ?? 65.0)
-        
-        print("--------- 🩺 تقرير المستشعرات الحالية ---------")
-        if let sleep = sleepMinutes {
-            print("💤 ساعات النوم المجلوبة: \(String(format: "%.1f", sleep / 60.0)) ساعة (\(Int(sleep)) دقيقة)")
+
+        /*
+         مهم:
+         حالياً نخلي expectedBedtimeHour = nil
+         لأنك قلتي إنك ما حاطة Sleep Schedule، بس تشغلين Sleep Focus.
+         
+         إذا بعدين خليتوا المستخدم يدخل وقت نوم متوقع، غيريها مثلاً:
+         let expectedBedtimeHour: Double? = 23.0
+        */
+        let expectedBedtimeHour: Double? = nil
+        let sleepGoalMinutes = 480.0
+
+        let sleepResult = await fetchLastNightSleepScore(
+            predicate: sleepPredicate,
+            sleepGoalMinutes: sleepGoalMinutes,
+            expectedBedtimeHour: expectedBedtimeHour
+        )
+
+        let hrvValue = await fetchLastHRV(predicate: hrvRecentPredicate)
+        let hrvBaseline = await fetchAverageHRV(predicate: hrvBaselinePredicate)
+        let activeCalories = await fetchTodayActiveCalories(predicate: todayPredicate) ?? 0.0
+
+        print("--------- 🩺 Current Sensor Report ---------")
+
+        if let sleep = sleepResult {
+            print("💤 Sleep Score: \(Int(sleep.totalScore))/100")
+
+            if sleep.usesTiming {
+                print("   Mode: With Sleep Schedule")
+                print("   Duration: \(Int(sleep.durationScore))/50 | Timing: \(Int(sleep.timingScore))/30 | Interruptions: \(Int(sleep.interruptionScore))/20")
+            } else {
+                print("   Mode: No Sleep Schedule")
+                print("   Duration: \(Int(sleep.durationScore))/70 | Timing: skipped | Interruptions: \(Int(sleep.interruptionScore))/30")
+            }
+
+            print("   Sleep Minutes: \(Int(sleep.sleepMinutes)) min")
         } else {
-            print("💤 ساعات النوم المجلوبة: ⚠️ لا توجد قراءة حية لليوم")
+            print("💤 Sleep Score: ⚠️ No sleep data found")
         }
-        
-        print("❤️ قراءة HRV المجلوبة: \(hrvValue != nil ? "\(Int(hrvValue!)) ms" : "⚠️ لا توجد قراءة حية لليوم")")
-        print("🔥 السعرات الحرارية النشطة اليوم: \(activeCalories != nil ? "\(Int(activeCalories!)) kcal" : "⚠️ لا توجد قراءة حية لليوم")")
-        print("⚡️ نبضات القلب المرتفعة المتسارعة (Spikes): \(hrSpikes)")
-        print("---------------------------------------------")
-        
-        // Privacy Guard
-        guard let sleepActual = sleepMinutes,
+
+        print("❤️ HRV: \(hrvValue != nil ? "\(Int(hrvValue!)) ms" : "⚠️ No HRV data")")
+        print("📈 HRV Baseline: \(hrvBaseline != nil ? "\(Int(hrvBaseline!)) ms" : "⚠️ No baseline, fallback will be used")")
+        print("🔥 Active Calories Today: \(Int(activeCalories)) kcal")
+        print("-------------------------------------------")
+
+        guard let sleepScore = sleepResult?.totalScore,
               let hrvActual = hrvValue else {
-            print("🚨 [HealthKit Engine] لا توجد بيانات كافية لحساب Energy Score.")
+            print("🚨 [HealthKit Engine] Not enough data to calculate Energy Score.")
             return nil
         }
-        
-        // Calculations Configuration
-        let sleepGoal = 480.0
-        let hrvBaseline = 50.0
-        let activeCalorieBurn = activeCalories ?? 0.0
-        let calorieTarget = 500.0
-        let totalSpikes = Double(hrSpikes)
-        
-        // Recovery
-        let sleepPart = min((sleepActual / sleepGoal) * 50.0, 50.0)
-        let hrvPart = min((hrvActual / hrvBaseline) * 50.0, 50.0)
-        let recoveryScore = sleepPart + hrvPart
-        
-        // Exertion
-        let caloriePart = min((activeCalorieBurn / calorieTarget) * 40.0, 40.0)
-        let spikePart = totalSpikes * 20.0
-        let exertionScore = caloriePart + spikePart
-        
-        // Energy Score
-        let finalScore = recoveryScore - (exertionScore * 0.5)
-        let boundedFinalScore = min(max(finalScore, 0.0), 100.0)
-        
-        print("🟢 Recovery: \(Int(recoveryScore)) | 🔥 Exertion: \(Int(exertionScore))")
-        print("🎯 [HealthKit Engine] السكور النهائي المحسوب للطاقة: \(Int(boundedFinalScore))%\n")
-        
-        return boundedFinalScore
-        
+
+        let baseline = max(hrvBaseline ?? 50.0, 1.0)
+        let hrvScore = min((hrvActual / baseline) * 100.0, 120.0)
+
+        let morningRecovery = (sleepScore * 0.70) + (hrvScore * 0.30)
+
+        let energyDrain = activeCalories / 25.0
+
+        let baseEnergy = morningRecovery - energyDrain
+        let boundedEnergy = min(max(baseEnergy, 0.0), 100.0)
+
+        print("🟢 Morning Recovery: \(Int(morningRecovery))")
+        print("🔥 Energy Drain: \(Int(energyDrain))")
+        print("🎯 Base Energy Score: \(Int(boundedEnergy))%\n")
+
+        return boundedEnergy
+
         #endif
     }
-    // MARK: - Background Fetch Queries
-    
-    private func fetchLastNightSleep(predicate: NSPredicate) async -> Double? {
+
+    // MARK: - Sleep Score
+
+    private func fetchLastNightSleepScore(
+        predicate: NSPredicate,
+        sleepGoalMinutes: Double,
+        expectedBedtimeHour: Double?
+    ) async -> SleepScoreResult? {
+
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
 
         return await withCheckedContinuation { continuation in
@@ -175,95 +206,179 @@ class HealthKitManager: ObservableObject {
                     let firstMinutes = first.reduce(0.0) {
                         $0 + $1.end.timeIntervalSince($1.start)
                     }
+
                     let secondMinutes = second.reduce(0.0) {
                         $0 + $1.end.timeIntervalSince($1.start)
                     }
+
                     return firstMinutes < secondMinutes
                 }
 
-                guard let session = bestSession else {
+                guard let session = bestSession,
+                      let firstInterval = session.first else {
                     continuation.resume(returning: nil)
                     return
                 }
 
-                let totalMinutes = session.reduce(0.0) {
+                let sleepMinutes = session.reduce(0.0) {
                     $0 + $1.end.timeIntervalSince($1.start)
                 } / 60.0
 
-                print("🛌 Sleep session intervals count: \(session.count)")
-                print("🧮 Apple-like sleep minutes: \(Int(totalMinutes))")
+                guard sleepMinutes > 0 else {
+                    continuation.resume(returning: nil)
+                    return
+                }
 
-                continuation.resume(returning: totalMinutes > 0 ? totalMinutes : nil)
+                var interruptionCount = 0
+
+                if session.count > 1 {
+                    for index in 1..<session.count {
+                        let previousEnd = session[index - 1].end
+                        let currentStart = session[index].start
+                        let gapMinutes = currentStart.timeIntervalSince(previousEnd) / 60.0
+
+                        if gapMinutes >= 5 {
+                            interruptionCount += 1
+                        }
+                    }
+                }
+
+                let usesTiming = expectedBedtimeHour != nil
+
+                let durationScore: Double
+                let timingScore: Double
+                let interruptionScore: Double
+
+                if usesTiming, let expectedBedtimeHour = expectedBedtimeHour {
+
+                    // Case 1: User has expected bedtime / sleep schedule
+                    // Duration: 50 points
+                    // Timing: 30 points
+                    // Interruptions: 20 points
+
+                    durationScore = min((sleepMinutes / sleepGoalMinutes) * 50.0, 50.0)
+
+                    let bedtimeMinutes = Self.minutesSinceMidnight(firstInterval.start)
+                    let targetBedtimeMinutes = expectedBedtimeHour * 60.0
+                    let timingDifference = Self.circularMinuteDifference(bedtimeMinutes, targetBedtimeMinutes)
+
+                    // كل 15 دقيقة فرق تخصم نقطة تقريباً
+                    timingScore = max(30.0 - (timingDifference / 15.0), 0.0)
+
+                    interruptionScore = max(20.0 - (Double(interruptionCount) * 4.0), 0.0)
+
+                } else {
+
+                    // Case 2: No expected bedtime / no sleep schedule
+                    // Duration: 70 points
+                    // Timing: skipped
+                    // Interruptions: 30 points
+
+                    durationScore = min((sleepMinutes / sleepGoalMinutes) * 70.0, 70.0)
+                    timingScore = 0.0
+                    interruptionScore = max(30.0 - (Double(interruptionCount) * 6.0), 0.0)
+                }
+
+                let totalScore = min(durationScore + timingScore + interruptionScore, 100.0)
+
+                print("🛌 Sleep session intervals count: \(session.count)")
+                print("🧮 App Sleep Score: \(Int(totalScore))")
+
+                continuation.resume(
+                    returning: SleepScoreResult(
+                        totalScore: totalScore,
+                        durationScore: durationScore,
+                        timingScore: timingScore,
+                        interruptionScore: interruptionScore,
+                        sleepMinutes: sleepMinutes,
+                        usesTiming: usesTiming
+                    )
+                )
             }
 
             healthStore.execute(query)
         }
     }
+
+    private static func minutesSinceMidnight(_ date: Date) -> Double {
+        let calendar = Calendar.current
+        let components = calendar.dateComponents([.hour, .minute], from: date)
+        return Double((components.hour ?? 0) * 60 + (components.minute ?? 0))
+    }
+
+    private static func circularMinuteDifference(_ a: Double, _ b: Double) -> Double {
+        let dayMinutes = 24.0 * 60.0
+        let difference = abs(a - b)
+        return min(difference, dayMinutes - difference)
+    }
+
+    // MARK: - HRV
+
     private func fetchLastHRV(predicate: NSPredicate) async -> Double? {
         let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+
         return await withCheckedContinuation { continuation in
-            let query = HKSampleQuery(sampleType: hrvType, predicate: predicate, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
+            let query = HKSampleQuery(
+                sampleType: hrvType,
+                predicate: predicate,
+                limit: 1,
+                sortDescriptors: [sortDescriptor]
+            ) { _, samples, _ in
                 guard let sample = samples?.first as? HKQuantitySample else {
                     continuation.resume(returning: nil)
                     return
                 }
-                continuation.resume(returning: sample.quantity.doubleValue(for: HKUnit(from: "ms")))
+
+                continuation.resume(
+                    returning: sample.quantity.doubleValue(for: HKUnit(from: "ms"))
+                )
             }
+
             healthStore.execute(query)
         }
     }
-    
-    private func fetchLastRHR(predicate: NSPredicate) async -> Double? {
-        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+
+    private func fetchAverageHRV(predicate: NSPredicate) async -> Double? {
         return await withCheckedContinuation { continuation in
-            let query = HKSampleQuery(sampleType: rhrType, predicate: predicate, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, _ in
-                guard let sample = samples?.first as? HKQuantitySample else {
+            let query = HKStatisticsQuery(
+                quantityType: hrvType,
+                quantitySamplePredicate: predicate,
+                options: .discreteAverage
+            ) { _, statistics, _ in
+                guard let average = statistics?.averageQuantity() else {
                     continuation.resume(returning: nil)
                     return
                 }
-                continuation.resume(returning: sample.quantity.doubleValue(for: HKUnit(from: "count/min")))
+
+                continuation.resume(
+                    returning: average.doubleValue(for: HKUnit(from: "ms"))
+                )
             }
+
             healthStore.execute(query)
         }
     }
-    
+
+    // MARK: - Active Calories
+
     private func fetchTodayActiveCalories(predicate: NSPredicate) async -> Double? {
         return await withCheckedContinuation { continuation in
-            let query = HKStatisticsQuery(quantityType: activeCaloriesType, quantitySamplePredicate: predicate, options: .cumulativeSum) { _, statistics, error in
-                guard let stats = statistics, let sum = stats.sumQuantity() else {
+            let query = HKStatisticsQuery(
+                quantityType: activeCaloriesType,
+                quantitySamplePredicate: predicate,
+                options: .cumulativeSum
+            ) { _, statistics, _ in
+                guard let stats = statistics,
+                      let sum = stats.sumQuantity() else {
                     continuation.resume(returning: 0.0)
                     return
                 }
-                let kcal = sum.doubleValue(for: .kilocalorie())
-                continuation.resume(returning: kcal)
+
+                continuation.resume(
+                    returning: sum.doubleValue(for: .kilocalorie())
+                )
             }
-            healthStore.execute(query)
-        }
-    }
-    
-    /// Checks for sudden high heart rate jumps today (e.g., periods exceeding 120 BPM while not actively logged as a workout)
-    private func fetchTodayHeartRateSpikes(predicate: NSPredicate, baselineRHR: Double) async -> Int {
-        return await withCheckedContinuation { continuation in
-            let query = HKSampleQuery(sampleType: heartRateType, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
-                guard let hrSamples = samples as? [HKQuantitySample], !hrSamples.isEmpty else {
-                    continuation.resume(returning: 0)
-                    return
-                }
-                
-                // Define a "spike" threshold: e.g., 40+ BPM over resting heart rate, or a static high exertion limit like 130 BPM
-                let spikeThreshold = max(baselineRHR + 45.0, 120.0)
-                
-                let uniqueSpikePeriods = hrSamples.filter { sample in
-                    let bpm = sample.quantity.doubleValue(for: HKUnit(from: "count/min"))
-                    return bpm >= spikeThreshold
-                }
-                
-                // Return a compressed count (representing instances or distinct high-stress time windows)
-                // If they have sustained high HR, we don't want to register 500 individual samples as 500 spikes.
-                // We count how many times it crossed into spike territory by grouping samples within close proximity.
-                let count = uniqueSpikePeriods.count > 0 ? min(uniqueSpikePeriods.count / 4, 3) : 0
-                continuation.resume(returning: count == 0 && uniqueSpikePeriods.count > 0 ? 1 : count)
-            }
+
             healthStore.execute(query)
         }
     }

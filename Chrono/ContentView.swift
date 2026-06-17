@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Combine
 
 struct ContentView: View {
     // Passed in from AppStorage Router
@@ -16,6 +17,11 @@ struct ContentView: View {
     @State private var isLoadingEnergyScore = true
     @State private var showEnergyInfo = false
     @StateObject private var healthKitManager = HealthKitManager()
+    private let energyRefreshTimer = Timer.publish(
+        every: 15 * 60,
+        on: .main,
+        in: .common
+    ).autoconnect()
     
     // MARK: - Logging Sheet State
 //    @State private var showLoggingSheet = false
@@ -242,33 +248,23 @@ struct ContentView: View {
         .task {
             await loadEnergyScoreOnLaunch()
         }
-//        .sheet(isPresented: $showLoggingSheet) {
-//            LoggingSheetView(
-//                coffeeAmount: $coffeeAmount,
-//                carbAmount: $carbAmount,
-//                onLogCoffee: { logExactCoffee() },
-//                onLogCarbs: { logExactCarbs() }
-//            )
-//            .presentationDetents([.medium])
-//            .presentationDragIndicator(.visible)
-//        }
+        .onReceive(energyRefreshTimer) { _ in
+            refreshEnergyScore(reason: "15-Minute Auto Refresh")
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
             print("⏰ [System Clock] تم رصد تغيير يدوي في وقت النظام! جاري إعادة تقييم الفترات حيوياً...")
             refreshEnergyScore(reason: "System Clock Sync")
         }
         .alert("Energy Score is Unavailable", isPresented: $showEnergyInfo) {
             Button("OK", role: .cancel) { }
-        }
-        message: {
+        } message: {
             Text("""
             Score requires:
             • Health permissions
-            • Waring your Apple Watch 
+            • Wearing your Apple Watch
             """)
         }
     }
-    
-    // MARK: - Energy Loading
     private func loadEnergyScoreOnLaunch() async {
         await MainActor.run {
             self.isLoadingEnergyScore = true
@@ -276,61 +272,73 @@ struct ContentView: View {
         }
         
         print("📱 [App Launch] جاري جلب خط الأساس الأولي للطاقة الصباحية...")
+        
         let isAuthorized = await healthKitManager.requestAuthorization()
         
-        if isAuthorized, let realBaseline = await healthKitManager.calculateLiveEnergyScore() {
-            await MainActor.run {
-                withAnimation {
-                    self.dynamicEnergyScore = realBaseline
-                    self.isLoadingEnergyScore = false
-                    print("🎯 [App Launch] تم تعيين الطاقة الصباحية الأولية: \(Int(realBaseline))%")
-                }
-            }
-        } else {
+        guard isAuthorized else {
             await MainActor.run {
                 withAnimation {
                     self.dynamicEnergyScore = nil
                     self.isLoadingEnergyScore = false
                 }
             }
+            return
+        }
+        
+        guard let realBaseline = await healthKitManager.calculateLiveEnergyScore() else {
+            await MainActor.run {
+                withAnimation {
+                    self.dynamicEnergyScore = nil
+                    self.isLoadingEnergyScore = false
+                }
+            }
+            return
+        }
+        
+        let finalScore = applyChronotypeModifier(to: realBaseline)
+        
+        await MainActor.run {
+            withAnimation {
+                self.dynamicEnergyScore = finalScore
+                self.isLoadingEnergyScore = false
+                
+                print("🎯 [App Launch] تم تعيين الطاقة الصباحية الأولية: \(Int(finalScore))%")
+            }
         }
     }
-    
+
     private func refreshEnergyScore(reason: String) {
         print("🔄 [\(reason)] جاري تحديث ومزامنة البيانات حيوياً...")
         
         Task {
-            if let updatedScore = await healthKitManager.calculateLiveEnergyScore() {
-                await MainActor.run {
-                    withAnimation {
-                        self.dynamicEnergyScore = updatedScore
-                        print("✅ [\(reason)] تم تحديث الطاقة: \(Int(updatedScore))%")
-                    }
+            guard let updatedScore = await healthKitManager.calculateLiveEnergyScore() else {
+                print("⚠️ [\(reason)] لا توجد بيانات كافية لتحديث الطاقة.")
+                return
+            }
+            
+            let finalScore = applyChronotypeModifier(to: updatedScore)
+            
+            await MainActor.run {
+                withAnimation {
+                    self.dynamicEnergyScore = finalScore
+                    
+                    print("✅ [\(reason)] تم تحديث الطاقة: \(Int(finalScore))%")
                 }
             }
         }
     }
+
+    private func applyChronotypeModifier(to baseScore: Double) -> Double {
+        return min(
+            max(
+                baseScore + chronotypeModifier,
+                0
+            ),
+            100
+        )
+    }
+
     
-    // MARK: - Math Engines
-//    private func logExactCoffee() {
-//        let pointsToAdd = (coffeeAmount / 250.0) * 15.0
-//        adjustEnergy(by: pointsToAdd)
-//        showLoggingSheet = false
-//    }
-//    
-//    private func logExactCarbs() {
-//        let pointsToSubtract = (carbAmount / 100.0) * -10.0
-//        adjustEnergy(by: pointsToSubtract)
-//        showLoggingSheet = false
-//    }
-//    
-//    private func adjustEnergy(by amount: Double) {
-//        guard let currentScore = dynamicEnergyScore else { return }
-//        withAnimation {
-//            let newScore = currentScore + amount
-//            dynamicEnergyScore = min(max(newScore, 0.0), 100.0)
-//        }
-//    }
     
     // MARK: - Themes & Assets
     private var backgroundImageName: String {
@@ -357,6 +365,43 @@ struct ContentView: View {
         case .wolf:    return "wolf_emoji"
         case .bear:    return "bear_emoji"
         case .lion:    return "lion_emoji"
+        }
+    }
+    
+    private var chronotypeModifier: Double {
+
+        let hour = Calendar.current.component(.hour, from: Date())
+
+        switch userChronotype {
+
+        case .bear:
+            switch hour {
+            case 9...12: return 5
+            case 13...15: return -5
+            case 19...21: return 2
+            default: return 0
+            }
+
+        case .wolf:
+            switch hour {
+            case 7...10: return -5
+            case 16...20: return 5
+            default: return 0
+            }
+
+        case .lion:
+            switch hour {
+            case 6...11: return 5
+            case 20...23: return -5
+            default: return 0
+            }
+
+        case .dolphin:
+            switch hour {
+            case 10...13: return 3
+            case 22...23: return -3
+            default: return 0
+            }
         }
     }
 }
