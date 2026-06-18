@@ -6,7 +6,7 @@
 //
 
 import SwiftUI
-import Combine
+//import Combine
 
 struct ContentView: View {
     // Passed in from AppStorage Router
@@ -16,13 +16,20 @@ struct ContentView: View {
     @State private var dynamicEnergyScore: Double? = nil
     @State private var isLoadingEnergyScore = true
     @State private var showEnergyInfo = false
+    @State private var showEnergyInsights = false
     @StateObject private var healthKitManager = HealthKitManager()
-    private let energyRefreshTimer = Timer.publish(
-        every: 15 * 60,
-        on: .main,
-        in: .common
-    ).autoconnect()
+    @State private var pullDistance: CGFloat = 0
+    @State private var isManualRefreshing = false
+    @State private var didJustSync = false
+    @State private var lastSyncedAt: Date? = nil
+    private let refreshThreshold: CGFloat = 70
     
+//    private let energyRefreshTimer = Timer.publish(
+//        every: 15 * 60,
+//        on: .main,
+//        in: .common
+//    ).autoconnect()
+//
     // MARK: - Logging Sheet State
 //    @State private var showLoggingSheet = false
 //    @State private var coffeeAmount: Double = 250.0
@@ -64,30 +71,29 @@ struct ContentView: View {
 
     var body: some View {
         ZStack {
-            // 1. YOUR ORIGINAL FIGMA BACKGROUND IMAGE
             Image(backgroundImageName)
                 .resizable()
                 .scaledToFill()
                 .ignoresSafeArea()
-            
+
             VStack(spacing: 0) {
-                // MARK: - HEADER
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(currentDayString)
-                            .font(.title3)
-                            .foregroundColor(.white.opacity(0.8))
-                        
-                        Text(greetingMessage)
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    
-                    Spacer()
-                    
-                    // The Custom Figma Asset Profile Button at top right
-//                    Button(action: { showLoggingSheet = true })
-////                    {
+                // MARK: - Fixed Header + Energy Area
+                VStack(spacing: 0) {
+                    refreshStatusBanner
+
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(currentDayString)
+                                .font(.title3)
+                                .foregroundColor(.white.opacity(0.8))
+
+                            Text(greetingMessage)
+                                .font(.system(size: 32, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+
+                        Spacer()
+
                         Image(emojiImageName)
                             .resizable()
                             .scaledToFit()
@@ -96,117 +102,159 @@ struct ContentView: View {
                             .padding(8)
                             .background(Color.white.opacity(0.08))
                             .clipShape(Circle())
-//                    }
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 60)
-                
-                // MARK: - ENERGY RING
-                Spacer(minLength: 16)
-                
-                if isLoadingEnergyScore {
-                    VStack {
-                        ProgressView()
-                            .tint(.white)
-                            .scaleEffect(1.5)
                     }
-                    .frame(height: 170)
-                } else if let currentScore = dynamicEnergyScore {
-                    VStack(spacing: 16) {
-                        ZStack {
-                            Circle()
-                                .stroke(lineWidth: 18)
-                                .opacity(0.2)
-                                .foregroundColor(ringColor)
-                            
-                            Circle()
-                                .trim(from: 0.0, to: CGFloat(currentScore) / 100.0)
-                                .stroke(style: StrokeStyle(lineWidth: 18, lineCap: .round, lineJoin: .round))
-                                .foregroundColor(ringColor)
-                                .rotationEffect(Angle(degrees: 270.0))
-                                .animation(.spring(response: 0.6, dampingFraction: 0.8), value: currentScore)
-                            
-                            HStack(alignment: .top, spacing: 2) {
-                                Text("\(Int(currentScore))")
-                                    .font(.system(size: 64, weight: .bold, design: .rounded))
-                                    .foregroundColor(.white)
-                                    .contentTransition(.numericText())
-                                Text("%")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.white.opacity(0.7))
-                                    .padding(.top, 12)
-                            }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 60)
+
+                    Spacer(minLength: 10)
+
+                    if isLoadingEnergyScore {
+                        VStack {
+                            ProgressView()
+                                .tint(.white)
+                                .scaleEffect(1.5)
                         }
-                        .frame(width: 170, height: 170)
-                        
-                        Text("ENERGY SCORE")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .tracking(2)
-                            .foregroundColor(.white.opacity(0.7))
-                    }
-                } else {
-                    VStack(spacing: 16) {
-                        ZStack(alignment: .topTrailing) {
+                        .frame(height: 170)
+                    } else if let currentScore = dynamicEnergyScore {
+                        VStack(spacing: 16) {
                             ZStack {
                                 Circle()
                                     .stroke(lineWidth: 18)
-                                    .foregroundColor(.white.opacity(0.12))
-                                
+                                    .opacity(0.2)
+                                    .foregroundColor(ringColor)
+
                                 Circle()
-                                    .stroke(style: StrokeStyle(lineWidth: 18, lineCap: .round))
-                                    .foregroundColor(.white.opacity(0.05))
-                                
+                                    .trim(from: 0.0, to: CGFloat(currentScore) / 100.0)
+                                    .stroke(style: StrokeStyle(lineWidth: 18, lineCap: .round, lineJoin: .round))
+                                    .foregroundColor(ringColor)
+                                    .rotationEffect(Angle(degrees: 270.0))
+                                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: currentScore)
+
                                 HStack(alignment: .top, spacing: 2) {
-                                    Text("—")
+                                    Text("\(Int(currentScore))")
                                         .font(.system(size: 64, weight: .bold, design: .rounded))
-                                        .foregroundColor(.white.opacity(0.45))
-                                    
+                                        .foregroundColor(.white)
+                                        .contentTransition(.numericText())
+
                                     Text("%")
                                         .font(.title2)
                                         .fontWeight(.bold)
-                                        .foregroundColor(.white.opacity(0.35))
+                                        .foregroundColor(.white.opacity(0.7))
                                         .padding(.top, 12)
                                 }
                             }
                             .frame(width: 170, height: 170)
-                            
-                            Button {
-                                showEnergyInfo = true
-                            } label: {
-                                Image(systemName: "info.circle.fill")
-                                    .font(.system(size: 24, weight: .semibold))
-                                    .foregroundColor(.white.opacity(0.75))
-                                    .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
+                            .overlay(alignment: .topTrailing) {
+                                Button {
+                                    showEnergyInsights = true
+                                } label: {
+                                    Image(systemName: "info.circle.fill")
+                                        .font(.system(size: 24, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.82))
+                                        .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
+                                }
+                                .buttonStyle(.plain)
+                                .offset(x: 8, y: -8)
                             }
-                            .offset(x: 4, y: -4)
+
+                            Text("ENERGY SCORE")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .tracking(2)
+                                .foregroundColor(.white.opacity(0.7))
+
+                            if let lastSyncedAt {
+                                Text("Last synced " + lastSyncedAt.formatted(date: .omitted, time: .shortened))
+                                    .font(.caption2)
+                                    .foregroundColor(.white.opacity(0.58))
+                            }
                         }
-                        
-                        Text("ENERGY SCORE")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .tracking(2)
-                            .foregroundColor(.white.opacity(0.45))
+                    } else {
+                        VStack(spacing: 16) {
+                            ZStack(alignment: .topTrailing) {
+                                ZStack {
+                                    Circle()
+                                        .stroke(lineWidth: 18)
+                                        .foregroundColor(.white.opacity(0.12))
+
+                                    Circle()
+                                        .stroke(style: StrokeStyle(lineWidth: 18, lineCap: .round))
+                                        .foregroundColor(.white.opacity(0.05))
+
+                                    HStack(alignment: .top, spacing: 2) {
+                                        Text("—")
+                                            .font(.system(size: 64, weight: .bold, design: .rounded))
+                                            .foregroundColor(.white.opacity(0.45))
+
+                                        Text("%")
+                                            .font(.title2)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.white.opacity(0.35))
+                                            .padding(.top, 12)
+                                    }
+                                }
+                                .frame(width: 170, height: 170)
+
+                                Button {
+                                    showEnergyInfo = true
+                                } label: {
+                                    Image(systemName: "info.circle.fill")
+                                        .font(.system(size: 24, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.75))
+                                        .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
+                                }
+                                .offset(x: 4, y: -4)
+                            }
+
+                            Text("ENERGY SCORE")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .tracking(2)
+                                .foregroundColor(.white.opacity(0.45))
+                        }
                     }
+
+                    Spacer(minLength: 16)
                 }
-                
-                Spacer(minLength: 16)
-                
-                // MARK: - BIO-SCHEDULE BOTTOM CONTAINER CARD
+                .offset(y: pullDistance * 0.18)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 10)
+                        .onChanged { value in
+                            guard !isManualRefreshing else { return }
+                            guard value.translation.height > 0 else { return }
+
+                            pullDistance = min(value.translation.height, 110)
+                        }
+                        .onEnded { value in
+                            let shouldRefresh = value.translation.height >= refreshThreshold
+
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                pullDistance = 0
+                            }
+
+                            if shouldRefresh {
+                                Task {
+                                    await pullToRefreshEnergyScore()
+                                }
+                            }
+                        }
+                )
+
+                // MARK: - Independent Bio-Schedule Scroll
                 VStack(alignment: .leading, spacing: 20) {
                     Text("Your Bio-Schedule")
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
                         .padding(.horizontal, 24)
-                        .padding(.top, 30)
-                    
-                    ScrollView(showsIndicators: false) {
-                        ScrollViewReader { proxy in
+                        .padding(.top, 26)
+
+                    ScrollViewReader { proxy in
+                        ScrollView(showsIndicators: false) {
                             VStack(spacing: 16) {
                                 let currentScoreInt = dynamicEnergyScore != nil ? Int(dynamicEnergyScore!) : nil
-                                
+
                                 ForEach(macroActivities) { activity in
                                     BioScheduleCardRow(
                                         activity: activity,
@@ -215,8 +263,8 @@ struct ContentView: View {
                                         lineAccentColor: lineAccentColor
                                     )
                                     .id(activity.id)
-                                    .onChange(of: activity.window.contains()) { oldValue, newValue in
-                                        if newValue == true {
+                                    .onChange(of: activity.window.contains()) { _, newValue in
+                                        if newValue {
                                             refreshEnergyScore(reason: "Chrono Sync - \(activity.title)")
                                         }
                                     }
@@ -224,32 +272,29 @@ struct ContentView: View {
                             }
                             .padding(.horizontal, 24)
                             .padding(.bottom, 30)
-                            .onChange(of: dynamicEnergyScore) { oldValue, newValue in
-                                if newValue != nil {
-                                    if let activeActivity = macroActivities.first(where: { $0.window.contains() }) {
-                                        withAnimation(.spring(response: 0.65, dampingFraction: 0.8)) {
-                                            proxy.scrollTo(activeActivity.id, anchor: .center)
-                                        }
-                                    }
-                                }
+                        }
+                        .onChange(of: dynamicEnergyScore) { _, newValue in
+                            guard newValue != nil,
+                                  let activeActivity = macroActivities.first(where: { $0.window.contains() })
+                            else { return }
+
+                            withAnimation(.spring(response: 0.65, dampingFraction: 0.8)) {
+                                proxy.scrollTo(activeActivity.id, anchor: .center)
                             }
                         }
                     }
-                    
-                    Spacer()
                 }
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .background(.ultraThinMaterial.opacity(0.55))
                 .background(Color.white.opacity(0.02))
                 .cornerRadius(30, corners: [.topLeft, .topRight])
-                .ignoresSafeArea(edges: .bottom)
             }
+
         }
-        .task {
-            await loadEnergyScoreOnLaunch()
-        }
-        .onReceive(energyRefreshTimer) { _ in
-            refreshEnergyScore(reason: "15-Minute Auto Refresh")
+        .onAppear {
+            Task {
+                await loadEnergyScoreOnLaunch()
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
             print("⏰ [System Clock] تم رصد تغيير يدوي في وقت النظام! جاري إعادة تقييم الفترات حيوياً...")
@@ -263,6 +308,15 @@ struct ContentView: View {
             • Health permissions
             • Wearing your Apple Watch
             """)
+        }
+        .sheet(isPresented: $showEnergyInsights) {
+            EnergyInsightsSheet(
+                insights: healthKitManager.latestInsights,
+                currentEnergy: dynamicEnergyScore,
+                chronotypeModifier: chronotypeModifier
+            )
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
     }
     private func loadEnergyScoreOnLaunch() async {
@@ -301,6 +355,7 @@ struct ContentView: View {
             withAnimation {
                 self.dynamicEnergyScore = finalScore
                 self.isLoadingEnergyScore = false
+                self.lastSyncedAt = Date()
                 
                 print("🎯 [App Launch] تم تعيين الطاقة الصباحية الأولية: \(Int(finalScore))%")
             }
@@ -321,10 +376,91 @@ struct ContentView: View {
             await MainActor.run {
                 withAnimation {
                     self.dynamicEnergyScore = finalScore
+                    self.lastSyncedAt = Date()
                     
                     print("✅ [\(reason)] تم تحديث الطاقة: \(Int(finalScore))%")
                 }
             }
+        }
+    }
+    
+    private func pullToRefreshEnergyScore() async {
+        await MainActor.run {
+            isManualRefreshing = true
+            didJustSync = false
+        }
+
+        print("🔄 [Manual Refresh] Syncing latest HealthKit data...")
+
+        guard let updatedScore = await healthKitManager.calculateLiveEnergyScore() else {
+            await MainActor.run {
+                isManualRefreshing = false
+            }
+            print("⚠️ [Manual Refresh] Not enough data to update energy.")
+            return
+        }
+
+        let finalScore = applyChronotypeModifier(to: updatedScore)
+
+        await MainActor.run {
+            withAnimation {
+                self.dynamicEnergyScore = finalScore
+                self.lastSyncedAt = Date()
+                self.isManualRefreshing = false
+                self.didJustSync = true
+                print("✅ [Manual Refresh] Energy updated: \(Int(finalScore))%")
+            }
+        }
+
+        try? await Task.sleep(for: .seconds(1.8))
+
+        await MainActor.run {
+            withAnimation {
+                self.didJustSync = false
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var refreshStatusBanner: some View {
+        if pullDistance > 0 || isManualRefreshing || didJustSync {
+            HStack(spacing: 8) {
+                if isManualRefreshing {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(0.82)
+                } else if didJustSync {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                } else {
+                    Image(systemName: pullDistance >= refreshThreshold
+                          ? "arrow.down.circle.fill"
+                          : "arrow.down.circle")
+                        .foregroundColor(.white.opacity(0.92))
+                }
+
+                Text(isManualRefreshing
+                     ? "Syncing Health data..."
+                     : didJustSync
+                       ? "Health data synced"
+                       : pullDistance >= refreshThreshold
+                         ? "Release to refresh"
+                         : "Pull to refresh")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.white.opacity(0.96))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(.ultraThinMaterial.opacity(0.85))
+            .overlay(
+                Capsule()
+                    .stroke(Color.white.opacity(0.18), lineWidth: 1)
+            )
+            .clipShape(Capsule())
+            .padding(.top, 32)
+            .padding(.bottom, 4)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .allowsHitTesting(false)
         }
     }
 
@@ -402,6 +538,252 @@ struct ContentView: View {
             case 22...23: return -3
             default: return 0
             }
+        }
+    }
+}
+
+
+
+
+struct EnergyInsightsSheet: View {
+    let insights: EnergyInsights?
+    let currentEnergy: Double?
+    let chronotypeModifier: Double
+
+    @Environment(\.dismiss) private var dismiss
+
+    private var chronotypeText: String {
+        if chronotypeModifier > 0 {
+            return "You are currently in a high-energy window."
+        } else if chronotypeModifier < 0 {
+            return "You are currently in a lower-energy window."
+        } else {
+            return "Your current time has a neutral rhythm adjustment."
+        }
+    }
+
+    private var chronotypeValue: String {
+        if chronotypeModifier > 0 {
+            return "+\(Int(chronotypeModifier))%"
+        } else {
+            return "\(Int(chronotypeModifier))%"
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let insights {
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 22) {
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Current Energy")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+
+                                Text("\(Int(currentEnergy ?? insights.baseEnergy))%")
+                                    .font(.system(size: 52, weight: .bold, design: .rounded))
+
+                                Text("Your energy is based on recovery, activity, and your current chronotype window.")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            Divider()
+
+                            InsightSectionTitle(
+                                icon: "sun.max.fill",
+                                title: "Morning Recovery",
+                                value: "\(Int(insights.morningRecovery))%"
+                            )
+
+                            InsightRow(
+                                title: "Sleep Score",
+                                value: "\(Int(insights.sleepScore))/100",
+                                subtitle: "\(Int(insights.sleepMinutes / 60))h \(Int(insights.sleepMinutes.truncatingRemainder(dividingBy: 60)))m sleep"
+                            )
+
+                            InsightRow(
+                                title: "Duration",
+                                value: "\(Int(insights.durationScore))/50",
+                                subtitle: "Based on your sleep goal"
+                            )
+
+                            InsightRow(
+                                title: "Sleep Timing",
+                                value: "\(Int(insights.timingScore))/30",
+                                subtitle: insights.usesSleepSchedule
+                                    ? "Based on your sleep schedule"
+                                    : "Neutral score — no sleep schedule set"
+                            )
+
+                            InsightRow(
+                                title: "Interruptions",
+                                value: "\(Int(insights.interruptionScore))/20",
+                                subtitle: insights.interruptionScore >= 18
+                                    ? "Minimal interruptions detected"
+                                    : "Some sleep interruptions were detected"
+                            )
+
+                            Divider()
+
+                            InsightSectionTitle(
+                                icon: "heart.fill",
+                                title: "HRV Readiness",
+                                value: "\(Int(insights.hrvReadinessScore))/100"
+                            )
+
+                            InsightRow(
+                                title: "Heart Rate Variability",
+                                value: "\(Int(insights.hrv)) ms",
+                                subtitle: "Your usual baseline is \(Int(insights.hrvBaseline)) ms"
+                            )
+
+                            Divider()
+
+                            InsightSectionTitle(
+                                icon: "flame.fill",
+                                title: "Energy Used Today",
+                                value: "−\(Int(insights.energyDrain))%"
+                            )
+
+                            InsightRow(
+                                title: "Active Energy",
+                                value: "\(Int(insights.activeCalories)) kcal",
+                                subtitle: "Activity gradually reduces today's energy"
+                            )
+
+                            Divider()
+
+                            InsightSectionTitle(
+                                icon: "clock.fill",
+                                title: "Chronotype Adjustment",
+                                value: chronotypeValue
+                            )
+
+                            Text(chronotypeText)
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+
+                            Divider()
+
+                            VStack(spacing: 12) {
+                                EnergyMathRow(
+                                    title: "Morning Recovery",
+                                    value: "\(Int(insights.morningRecovery))%"
+                                )
+
+                                EnergyMathRow(
+                                    title: "Activity Drain",
+                                    value: "−\(Int(insights.energyDrain))%"
+                                )
+
+                                EnergyMathRow(
+                                    title: "Chronotype Adjustment",
+                                    value: chronotypeValue
+                                )
+
+                                Divider()
+
+                                EnergyMathRow(
+                                    title: "Current Energy",
+                                    value: "\(Int(currentEnergy ?? insights.baseEnergy))%",
+                                    isBold: true
+                                )
+                            }
+                            .padding(18)
+                            .background(Color.secondary.opacity(0.10))
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
+                        }
+                        .padding(24)
+                    }
+                } else {
+                    VStack(spacing: 14) {
+                        Image(systemName: "heart.text.square")
+                            .font(.system(size: 42))
+                            .foregroundColor(.secondary)
+
+                        Text("Insights are unavailable")
+                            .font(.title3.weight(.bold))
+
+                        Text("Sync your Health data to view your energy breakdown.")
+                            .font(.subheadline)
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(30)
+                }
+            }
+            .navigationTitle("Energy Insights")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct InsightSectionTitle: View {
+    let icon: String
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack {
+            Label(title, systemImage: icon)
+                .font(.headline)
+
+            Spacer()
+
+            Text(value)
+                .font(.headline.weight(.bold))
+        }
+    }
+}
+
+struct InsightRow: View {
+    let title: String
+    let value: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+
+            Text(value)
+                .font(.subheadline.weight(.bold))
+        }
+    }
+}
+
+struct EnergyMathRow: View {
+    let title: String
+    let value: String
+    var isBold: Bool = false
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(isBold ? .headline : .subheadline)
+
+            Spacer()
+
+            Text(value)
+                .font(isBold ? .headline.weight(.bold) : .subheadline.weight(.bold))
         }
     }
 }

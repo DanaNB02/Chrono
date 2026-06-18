@@ -19,9 +19,29 @@ struct SleepScoreResult {
     let usesTiming: Bool
 }
 
+struct EnergyInsights {
+    let sleepScore: Double
+    let sleepMinutes: Double
+    let durationScore: Double
+    let timingScore: Double
+    let interruptionScore: Double
+    let usesSleepSchedule: Bool
+
+    let hrv: Double
+    let hrvBaseline: Double
+    let hrvReadinessScore: Double
+
+    let morningRecovery: Double
+    let activeCalories: Double
+    let energyDrain: Double
+    let baseEnergy: Double
+}
+
+
 class HealthKitManager: ObservableObject {
 
     let healthStore = HKHealthStore()
+    @Published private(set) var latestInsights: EnergyInsights?
 
     // MARK: - Health Types to Read
     private let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
@@ -98,15 +118,11 @@ class HealthKitManager: ObservableObject {
 
             if sleep.usesTiming {
                 print("   Mode: With Sleep Schedule")
+                print("   Duration: \(Int(sleep.durationScore))/50 | Timing: \(Int(sleep.timingScore))/30 | Interruptions: \(Int(sleep.interruptionScore))/20")
             } else {
                 print("   Mode: No Sleep Schedule")
+                print("   Duration: \(Int(sleep.durationScore))/70 | Timing: skipped | Interruptions: \(Int(sleep.interruptionScore))/30")
             }
-
-            print(
-                "   Duration: \(Int(sleep.durationScore))/50 | " +
-                "Timing: \(Int(sleep.timingScore))/30 | " +
-                "Interruptions: \(Int(sleep.interruptionScore))/20"
-            )
 
             print("   Sleep Minutes: \(Int(sleep.sleepMinutes)) min")
         } else {
@@ -118,11 +134,13 @@ class HealthKitManager: ObservableObject {
         print("🔥 Active Calories Today: \(Int(activeCalories)) kcal")
         print("-------------------------------------------")
 
-        guard let sleepScore = sleepResult?.totalScore,
+        guard let sleepResult,
               let hrvActual = hrvValue else {
             print("🚨 [HealthKit Engine] Not enough data to calculate Energy Score.")
             return nil
         }
+
+        let sleepScore = sleepResult.totalScore
 
         let baseline = max(hrvBaseline ?? 50.0, 1.0)
         let hrvScore = min((hrvActual / baseline) * 100.0, 120.0)
@@ -138,6 +156,26 @@ class HealthKitManager: ObservableObject {
         print("🔥 Energy Drain: \(Int(energyDrain))")
         print("🎯 Base Energy Score: \(Int(boundedEnergy))%\n")
 
+        let insights = EnergyInsights(
+            sleepScore: sleepScore,
+            sleepMinutes: sleepResult.sleepMinutes,
+            durationScore: sleepResult.durationScore,
+            timingScore: sleepResult.timingScore,
+            interruptionScore: sleepResult.interruptionScore,
+            usesSleepSchedule: sleepResult.usesTiming,
+            hrv: hrvActual,
+            hrvBaseline: baseline,
+            hrvReadinessScore: hrvScore,
+            morningRecovery: morningRecovery,
+            activeCalories: activeCalories,
+            energyDrain: energyDrain,
+            baseEnergy: boundedEnergy
+        )
+
+        await MainActor.run {
+            self.latestInsights = insights
+        }
+        
         return boundedEnergy
 
         #endif
