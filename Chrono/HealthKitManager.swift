@@ -98,11 +98,15 @@ class HealthKitManager: ObservableObject {
 
             if sleep.usesTiming {
                 print("   Mode: With Sleep Schedule")
-                print("   Duration: \(Int(sleep.durationScore))/50 | Timing: \(Int(sleep.timingScore))/30 | Interruptions: \(Int(sleep.interruptionScore))/20")
             } else {
                 print("   Mode: No Sleep Schedule")
-                print("   Duration: \(Int(sleep.durationScore))/70 | Timing: skipped | Interruptions: \(Int(sleep.interruptionScore))/30")
             }
+
+            print(
+                "   Duration: \(Int(sleep.durationScore))/50 | " +
+                "Timing: \(Int(sleep.timingScore))/30 | " +
+                "Interruptions: \(Int(sleep.interruptionScore))/20"
+            )
 
             print("   Sleep Minutes: \(Int(sleep.sleepMinutes)) min")
         } else {
@@ -146,8 +150,11 @@ class HealthKitManager: ObservableObject {
         sleepGoalMinutes: Double,
         expectedBedtimeHour: Double?
     ) async -> SleepScoreResult? {
-
-        let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+        
+        let sortDescriptor = NSSortDescriptor(
+            key: HKSampleSortIdentifierStartDate,
+            ascending: true
+        )
 
         return await withCheckedContinuation { continuation in
             let query = HKSampleQuery(
@@ -157,7 +164,8 @@ class HealthKitManager: ObservableObject {
                 sortDescriptors: [sortDescriptor]
             ) { _, samples, _ in
 
-                guard let samples = samples as? [HKCategorySample], !samples.isEmpty else {
+                guard let samples = samples as? [HKCategorySample],
+                      !samples.isEmpty else {
                     continuation.resume(returning: nil)
                     return
                 }
@@ -179,6 +187,7 @@ class HealthKitManager: ObservableObject {
                     return
                 }
 
+                // Groups close sleep stages into one sleep session.
                 let maxGap: TimeInterval = 2 * 60 * 60
                 var sessions: [[(start: Date, end: Date)]] = []
                 var currentSession: [(start: Date, end: Date)] = []
@@ -229,6 +238,7 @@ class HealthKitManager: ObservableObject {
                     return
                 }
 
+                // Counts awake gaps of 5 minutes or more.
                 var interruptionCount = 0
 
                 if session.count > 1 {
@@ -249,37 +259,58 @@ class HealthKitManager: ObservableObject {
                 let timingScore: Double
                 let interruptionScore: Double
 
-                if usesTiming, let expectedBedtimeHour = expectedBedtimeHour {
+                if let expectedBedtimeHour = expectedBedtimeHour {
 
-                    // Case 1: User has expected bedtime / sleep schedule
-                    // Duration: 50 points
-                    // Timing: 30 points
-                    // Interruptions: 20 points
+                    // User has a Sleep Schedule / expected bedtime.
+                    // Duration: 50 | Timing: 30 | Interruptions: 20
 
-                    durationScore = min((sleepMinutes / sleepGoalMinutes) * 50.0, 50.0)
+                    durationScore = min(
+                        (sleepMinutes / sleepGoalMinutes) * 50.0,
+                        50.0
+                    )
 
                     let bedtimeMinutes = Self.minutesSinceMidnight(firstInterval.start)
                     let targetBedtimeMinutes = expectedBedtimeHour * 60.0
-                    let timingDifference = Self.circularMinuteDifference(bedtimeMinutes, targetBedtimeMinutes)
+                    let timingDifference = Self.circularMinuteDifference(
+                        bedtimeMinutes,
+                        targetBedtimeMinutes
+                    )
 
-                    // كل 15 دقيقة فرق تخصم نقطة تقريباً
-                    timingScore = max(30.0 - (timingDifference / 15.0), 0.0)
+                    // Every 15 minutes away from the expected bedtime removes 1 point.
+                    timingScore = max(
+                        30.0 - (timingDifference / 15.0),
+                        0.0
+                    )
 
-                    interruptionScore = max(20.0 - (Double(interruptionCount) * 4.0), 0.0)
+                    interruptionScore = max(
+                        20.0 - (Double(interruptionCount) * 4.0),
+                        0.0
+                    )
 
                 } else {
 
-                    // Case 2: No expected bedtime / no sleep schedule
-                    // Duration: 70 points
-                    // Timing: skipped
-                    // Interruptions: 30 points
+                    // No Sleep Schedule:
+                    // Keep Apple's normal 50 / 30 / 20 structure.
+                    // Until we calculate the user's usual bedtime from past nights,
+                    // give neutral timing points instead of removing Timing entirely.
 
-                    durationScore = min((sleepMinutes / sleepGoalMinutes) * 70.0, 70.0)
-                    timingScore = 0.0
-                    interruptionScore = max(30.0 - (Double(interruptionCount) * 6.0), 0.0)
+                    durationScore = min(
+                        (sleepMinutes / sleepGoalMinutes) * 50.0,
+                        50.0
+                    )
+
+                    timingScore = 24.0
+
+                    interruptionScore = max(
+                        20.0 - (Double(interruptionCount) * 4.0),
+                        0.0
+                    )
                 }
 
-                let totalScore = min(durationScore + timingScore + interruptionScore, 100.0)
+                let totalScore = min(
+                    durationScore + timingScore + interruptionScore,
+                    100.0
+                )
 
                 print("🛌 Sleep session intervals count: \(session.count)")
                 print("🧮 App Sleep Score: \(Int(totalScore))")
@@ -299,7 +330,6 @@ class HealthKitManager: ObservableObject {
             healthStore.execute(query)
         }
     }
-
     private static func minutesSinceMidnight(_ date: Date) -> Double {
         let calendar = Calendar.current
         let components = calendar.dateComponents([.hour, .minute], from: date)
