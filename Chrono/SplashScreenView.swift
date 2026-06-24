@@ -5,6 +5,7 @@
 //  Created by Reema on 21/12/1447 AH.
 //
 
+
 import SwiftUI
 
 struct SplashScreenView: View {
@@ -15,6 +16,9 @@ struct SplashScreenView: View {
     // قراءة الحالات التاريخية للمستخدم من الـ UserDefaults
     @AppStorage("userChronotype") private var savedChronotype: String = ""
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding: Bool = false
+    
+    // ✨ NEW: AppStorage to check if working hours are set
+    @AppStorage("hasSetWorkingHours") private var hasSetWorkingHours: Bool = false
     
     let bgGradient = LinearGradient(
         colors: [Color(red: 0.10, green: 0.14, blue: 0.21), Color(red: 0.18, green: 0.28, blue: 0.45)],
@@ -30,6 +34,10 @@ struct SplashScreenView: View {
                     .transition(.opacity)
             } else if savedChronotype.isEmpty {
                 QuizView()
+                    .transition(.opacity)
+            } else if !hasSetWorkingHours {
+                // ✨ NEW: Route to Working Hours before the Dashboard
+                WorkingHoursView()
                     .transition(.opacity)
             } else {
                 if let type = Chronotype(rawValue: savedChronotype) {
@@ -79,7 +87,6 @@ struct SplashScreenView: View {
                     self.opacity = 1.0
                 }
                 
-                // الانتقال السلس بعد انتهاء الأنيميشن
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
                     withAnimation(.easeInOut(duration: 0.4)) {
                         self.isAnimationDone = true
